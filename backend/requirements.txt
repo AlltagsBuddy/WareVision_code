@@ -1,0 +1,31 @@
+# FastAPI & Server
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# Database
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Validation & Config
+pydantic==2.6.1
+pydantic-settings==2.1.0
+email-validator==2.1.0.post1
+
+# Redis
+redis==5.0.1
+celery==5.3.6
+
+# Utils
+python-multipart==0.0.9
+python-dotenv==1.0.1
+uuid6==2024.1.28
+
+# PDF (später)
+# reportlab==4.0.9
+# weasyprint==60.2
