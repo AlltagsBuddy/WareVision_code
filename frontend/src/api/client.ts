@@ -81,11 +81,12 @@ export const usersApi = {
 }
 
 export const customersApi = {
-  list: (params?: { skip?: number; limit?: number; search?: string }) => {
+  list: (params?: { skip?: number; limit?: number; search?: string; include_inactive?: boolean }) => {
     const p = new URLSearchParams()
     if (params?.skip) p.set('skip', String(params.skip))
     if (params?.limit) p.set('limit', String(params.limit))
     if (params?.search) p.set('search', params.search)
+    if (params?.include_inactive) p.set('include_inactive', 'true')
     return api<any[]>('/customers?' + p)
   },
   create: (data: Record<string, unknown>) =>

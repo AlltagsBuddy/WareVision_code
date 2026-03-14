@@ -6,6 +6,7 @@ export default function Customers() {
   const { user } = useAuth()
   const [customers, setCustomers] = useState<any[]>([])
   const [search, setSearch] = useState('')
+  const [includeInactive, setIncludeInactive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
@@ -36,8 +37,8 @@ export default function Customers() {
   })
 
   useEffect(() => {
-    customersApi.list({ search: search || undefined }).then(setCustomers).finally(() => setLoading(false))
-  }, [search])
+    customersApi.list({ search: search || undefined, include_inactive: includeInactive }).then(setCustomers).finally(() => setLoading(false))
+  }, [search, includeInactive])
 
   const resetForm = () => {
     setForm({
@@ -76,7 +77,7 @@ export default function Customers() {
         setCustomers((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...data } : c)))
       } else {
         await customersApi.create(data)
-        const updated = await customersApi.list({ search: search || undefined })
+        const updated = await customersApi.list({ search: search || undefined, include_inactive: includeInactive })
         setCustomers(updated)
       }
       setShowForm(false)
@@ -97,7 +98,11 @@ export default function Customers() {
     if (!confirm(`Kunde "${c.company_name || `${c.first_name} ${c.last_name}`.trim()}" wirklich deaktivieren?`)) return
     try {
       await customersApi.delete(c.id)
-      setCustomers((prev) => prev.filter((x) => x.id !== c.id))
+      setCustomers((prev) =>
+        includeInactive
+          ? prev.map((x) => (x.id === c.id ? { ...x, is_active: false } : x))
+          : prev.filter((x) => x.id !== c.id)
+      )
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
@@ -208,6 +213,10 @@ export default function Customers() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
+          Deaktivierte anzeigen
+        </label>
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">
           + Neuer Kunde
         </button>
@@ -321,8 +330,8 @@ export default function Customers() {
           </thead>
           <tbody>
             {customers.map((c) => (
-              <tr key={c.id}>
-                <td>{getName(c)}</td>
+              <tr key={c.id} className={!c.is_active ? 'inactive' : ''}>
+                <td>{getName(c)}{!c.is_active && <span className="badge" style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>inaktiv</span>}</td>
                 <td>{c.email || '–'}</td>
                 <td>{c.phone || '–'}</td>
                 <td>{c.customer_type}</td>
@@ -335,7 +344,7 @@ export default function Customers() {
                       <button type="button" onClick={() => handleDsgvoDelete(c)} className="btn-secondary btn-sm">DSGVO: Löschen</button>
                     </>
                   )}
-                  <button type="button" onClick={() => handleDelete(c)} className="btn-secondary btn-sm">Deaktivieren</button>
+                  {c.is_active && <button type="button" onClick={() => handleDelete(c)} className="btn-secondary btn-sm">Deaktivieren</button>}
                 </td>
               </tr>
             ))}
