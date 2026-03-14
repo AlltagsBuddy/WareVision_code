@@ -1,6 +1,6 @@
 """Auth schemas."""
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class Token(BaseModel):
@@ -17,10 +17,18 @@ class TokenData(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Login request."""
+    """Login request. Verwendet str für E-Mail, damit .local-Domains (z.B. admin@warevision.local) akzeptiert werden."""
 
-    email: EmailStr
+    email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def email_format(cls, v: str) -> str:
+        """Einfache E-Mail-Formatprüfung (inkl. .local)."""
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Ungültiges E-Mail-Format")
+        return v.strip().lower()
 
 
 class UserResponse(BaseModel):
