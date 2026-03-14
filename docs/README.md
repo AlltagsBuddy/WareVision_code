@@ -9,6 +9,7 @@
 | Dokument | Beschreibung |
 |----------|--------------|
 | [ANLEITUNG_PROJEKTSTRUKTUR.md](./ANLEITUNG_PROJEKTSTRUKTUR.md) | **Schritt-für-Schritt: Projektstruktur erstellen** |
+| [ANLEITUNG_SCHRITT5_PROJEKT_TESTEN.md](./ANLEITUNG_SCHRITT5_PROJEKT_TESTEN.md) | **Detailliert: Projekt starten und testen** |
 | [CODING_GUIDELINES.md](./CODING_GUIDELINES.md) | Coding-Standards, Commits, Namenskonventionen |
 | [ROADMAP.md](./ROADMAP.md) | Haupt-Roadmap mit Phasen, Epics, Zeitplan |
 | [SPRINT_ROADMAP.md](./SPRINT_ROADMAP.md) | Detaillierte Sprint- und Epic-Story-Matrix |

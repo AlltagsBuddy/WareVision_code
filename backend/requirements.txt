@@ -24,7 +24,7 @@ celery==5.3.6
 # Utils
 python-multipart==0.0.9
 python-dotenv==1.0.1
-uuid6==2024.1.28
+uuid6==2024.7.10
 
 # PDF (später)
 # reportlab==4.0.9

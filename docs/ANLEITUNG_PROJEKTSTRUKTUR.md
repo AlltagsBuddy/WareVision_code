@@ -106,59 +106,17 @@ git checkout -b develop
 
 ---
 
-## Schritt 5: Projekt klonen und testen (nur du)
+## Schritt 5: Projekt starten und testen (nur du)
 
-### 5.1 Backend testen
+**→ Ausführliche Anleitung:** [ANLEITUNG_SCHRITT5_PROJEKT_TESTEN.md](./ANLEITUNG_SCHRITT5_PROJEKT_TESTEN.md)
 
-1. **Terminal öffnen**
-2. **Zum Backend wechseln:**
-   ```
-   cd d:\WareVision\WareVision_code\backend
-   ```
-3. **Virtuelle Umgebung erstellen:**
-   ```
-   python -m venv .venv
-   ```
-4. **Virtuelle Umgebung aktivieren (PowerShell):**
-   ```
-   .\.venv\Scripts\Activate.ps1
-   ```
-   Falls Fehler: ggf. Ausführungsrichtlinie anpassen:
-   ```
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-   ```
-5. **Abhängigkeiten installieren:**
-   ```
-   pip install -r requirements.txt
-   ```
-6. **PostgreSQL:** Datenbank `warevision` anlegen (z.B. pgAdmin oder `psql`)
-7. **Datenbank initialisieren:**
-   ```
-   python scripts\init_db.py
-   ```
-8. **Backend starten:**
-   ```
-   uvicorn app.main:app --reload
-   ```
-9. **Prüfen:** Browser öffnen → http://localhost:8000/docs
+### Kurzfassung
 
-### 5.2 Frontend testen (zweites Terminal)
-
-1. **Neues Terminal öffnen**
-2. **Zum Frontend wechseln:**
-   ```
-   cd d:\WareVision\WareVision_code\frontend
-   ```
-3. **Abhängigkeiten installieren:**
-   ```
-   npm install
-   ```
-4. **Frontend starten:**
-   ```
-   npm run dev
-   ```
-5. **Prüfen:** Browser öffnen → http://localhost:5173  
-   Login: `admin@warevision.local` / `admin123`
+1. **Voraussetzungen:** Python, Node.js, PostgreSQL prüfen
+2. **PostgreSQL:** Datenbank `warevision` anlegen (psql, pgAdmin oder Docker)
+3. **Backend:** `cd backend` → venv → `pip install -r requirements.txt` → `python scripts\init_db.py` → `uvicorn app.main:app --reload`
+4. **Frontend:** Neues Terminal → `cd frontend` → `npm install` → `npm run dev`
+5. **Test:** http://localhost:5173 → Login `admin@warevision.local` / `admin123`
 
 ---
 
