@@ -5,6 +5,8 @@ const ACTION_LABELS: Record<string, string> = {
   create: 'Erstellt',
   update: 'Geändert',
   delete: 'Gelöscht',
+  dsgvo_anonymize: 'DSGVO: Anonymisiert',
+  dsgvo_delete: 'DSGVO: Gelöscht',
   issue: 'Ausgestellt',
   mark_paid: 'Als bezahlt',
   reminder: 'Mahnung',

@@ -48,6 +48,25 @@ export default function Layout() {
         </nav>
         <div className="user-menu">
           <span>{user?.first_name} {user?.last_name}</span>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const data = await authApi.exportMyData()
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                const a = document.createElement('a')
+                a.href = URL.createObjectURL(blob)
+                a.download = `Meine_Daten_${new Date().toISOString().slice(0, 10)}.json`
+                a.click()
+                URL.revokeObjectURL(a.href)
+              } catch {
+                alert('Export fehlgeschlagen')
+              }
+            }}
+            className="btn-logout"
+          >
+            Meine Daten exportieren
+          </button>
           <button type="button" onClick={() => setShowPasswordModal(true)} className="btn-logout">
             Passwort ändern
           </button>

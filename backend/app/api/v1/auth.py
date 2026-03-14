@@ -54,6 +54,25 @@ def get_current_user_info(
     )
 
 
+@router.get("/me/export")
+def export_my_data(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    """DSGVO Art. 15/20: Export own user data (Auskunftsrecht, Datenübertragbarkeit)."""
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "user": {
+            "id": str(current_user.id),
+            "email": current_user.email,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "role_name": current_user.role.name,
+            "is_active": current_user.is_active,
+            "last_login_at": current_user.last_login_at.isoformat() if current_user.last_login_at else None,
+        },
+    }
+
+
 @router.post("/change-password")
 def change_password(
     payload: ChangePasswordRequest,

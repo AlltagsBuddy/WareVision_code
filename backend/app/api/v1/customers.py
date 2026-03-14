@@ -201,6 +201,52 @@ def delete_customer_address(
     db.commit()
 
 
+@router.post("/{customer_id}/dsgvo-delete")
+def dsgvo_delete_customer(
+    customer_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> dict:
+    """DSGVO Art. 17: Recht auf Löschung. Anonymisiert bei Rechnungen (GoBD), sonst endgültige Löschung."""
+    from app.models.invoice import Invoice
+    from app.models.workshop_order import WorkshopOrder
+
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kunde nicht gefunden")
+
+    has_invoices = db.query(Invoice).filter(Invoice.customer_id == customer_id).first() is not None
+    has_orders = db.query(WorkshopOrder).filter(WorkshopOrder.customer_id == customer_id).first() is not None
+
+    if has_invoices or has_orders:
+        customer.company_name = "[Anonymisiert]"
+        customer.first_name = "[Anonymisiert]"
+        customer.last_name = "[Anonymisiert]"
+        customer.email = f"geloescht_{customer_id.hex[:8]}@anonymisiert.local"
+        customer.phone = None
+        customer.vat_id = None
+        customer.notes = None
+        customer.is_active = False
+        for addr in customer.addresses:
+            addr.street = "[Anonymisiert]"
+            addr.house_number = None
+            addr.postal_code = "00000"
+            addr.city = "[Anonymisiert]"
+        log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_anonymize")
+        db.commit()
+        return {"action": "anonymized", "reason": "Rechnungen oder Aufträge vorhanden (GoBD)"}
+    else:
+        from app.models.appointment import Appointment
+
+        for apt in db.query(Appointment).filter(Appointment.customer_id == customer_id).all():
+            apt.customer_id = None
+            apt.vehicle_id = None
+        log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_delete", old_values={"email": customer.email})
+        db.delete(customer)
+        db.commit()
+        return {"action": "deleted"}
+
+
 @router.get("/{customer_id}/export")
 def export_customer_data(
     customer_id: UUID,

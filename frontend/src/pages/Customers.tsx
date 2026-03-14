@@ -103,6 +103,22 @@ export default function Customers() {
     }
   }
 
+  const handleDsgvoDelete = async (c: any) => {
+    if (!confirm(`DSGVO-Löschung für "${getName(c)}"? Bei Rechnungen/Aufträgen wird anonymisiert, sonst endgültig gelöscht.`)) return
+    try {
+      const res = await customersApi.dsgvoDelete(c.id)
+      if (res.action === 'deleted') {
+        setCustomers((prev) => prev.filter((x) => x.id !== c.id))
+        if (detailCustomer?.id === c.id) closeDetail()
+      } else {
+        setCustomers((prev) => prev.map((x) => (x.id === c.id ? { ...x, company_name: '[Anonymisiert]', first_name: '[Anonymisiert]', last_name: '[Anonymisiert]', email: '[Anonymisiert]', is_active: false } : x)))
+        if (detailCustomer?.id === c.id) closeDetail()
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
   const handleExport = async (c: any) => {
     try {
       const data = await customersApi.exportData(c.id)
@@ -313,7 +329,10 @@ export default function Customers() {
                   <button type="button" onClick={() => openDetail(c)} className="btn-secondary btn-sm">Detail</button>
                   <button type="button" onClick={() => openEdit(c)} className="btn-secondary btn-sm">Bearbeiten</button>
                   {user?.role_name === 'admin' && (
-                    <button type="button" onClick={() => handleExport(c)} className="btn-secondary btn-sm">Export</button>
+                    <>
+                      <button type="button" onClick={() => handleExport(c)} className="btn-secondary btn-sm">Export</button>
+                      <button type="button" onClick={() => handleDsgvoDelete(c)} className="btn-secondary btn-sm">DSGVO: Löschen</button>
+                    </>
                   )}
                   <button type="button" onClick={() => handleDelete(c)} className="btn-secondary btn-sm">Deaktivieren</button>
                 </td>

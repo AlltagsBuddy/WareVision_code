@@ -36,6 +36,7 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => api<{ id: string; email: string; first_name: string; last_name: string; role_name: string }>('/auth/me'),
+  exportMyData: () => api<Record<string, unknown>>('/auth/me/export'),
   changePassword: (current_password: string, new_password: string) =>
     api<{ message: string }>('/auth/change-password', {
       method: 'POST',
@@ -97,6 +98,8 @@ export const customersApi = {
     api<void>(`/customers/${customerId}/addresses/${addressId}`, { method: 'DELETE' }),
   exportData: (customerId: string) =>
     api<any>(`/customers/${customerId}/export`),
+  dsgvoDelete: (customerId: string) =>
+    api<{ action: string; reason?: string }>(`/customers/${customerId}/dsgvo-delete`, { method: 'POST' }),
 }
 
 export const vehiclesApi = {
