@@ -11,6 +11,7 @@ from app.models.base import BaseModel
 
 if TYPE_CHECKING:
     from app.models.vehicle import Vehicle
+    from app.models.maintenance_plan import MaintenancePlan  # noqa: F401
 
 
 class Manufacturer(BaseModel):
@@ -22,6 +23,7 @@ class Manufacturer(BaseModel):
 
     models = relationship("VehicleModel", back_populates="manufacturer", cascade="all, delete-orphan")
     vehicles = relationship("Vehicle", back_populates="manufacturer")
+    maintenance_plans = relationship("MaintenancePlan", back_populates="manufacturer", cascade="all, delete-orphan")
 
 
 class VehicleModel(BaseModel):
@@ -39,3 +41,4 @@ class VehicleModel(BaseModel):
 
     manufacturer = relationship("Manufacturer", back_populates="models")
     vehicles = relationship("Vehicle", back_populates="vehicle_model")
+    maintenance_plans = relationship("MaintenancePlan", back_populates="vehicle_model", cascade="all, delete-orphan")

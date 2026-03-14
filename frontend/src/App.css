@@ -129,6 +129,10 @@
   color: #fbbf24;
 }
 
+.warning-row td {
+  background: rgba(251, 191, 36, 0.1);
+}
+
 .dashboard-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

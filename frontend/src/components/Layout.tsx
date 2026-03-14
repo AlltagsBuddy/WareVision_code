@@ -12,8 +12,10 @@ export default function Layout() {
     { path: '/articles', label: 'Artikel' },
     { path: '/stock', label: 'Lager' },
     { path: '/workshop-orders', label: 'Werkstattaufträge' },
+    { path: '/maintenance-plans', label: 'Wartungspläne' },
     { path: '/appointments', label: 'Terminplaner' },
     { path: '/invoices', label: 'Rechnungen' },
+    { path: '/documents', label: 'Dokumente' },
   ]
 
   return (

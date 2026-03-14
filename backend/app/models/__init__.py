@@ -12,7 +12,9 @@ from app.models.article import Article
 from app.models.stock_movement import StockMovement
 from app.models.appointment import Appointment
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
+from app.models.maintenance_plan import MaintenancePlan, MaintenanceTask
 from app.models.invoice import Invoice, InvoiceItem
+from app.models.document import Document
 from app.models.audit_log import AuditLog
 
 __all__ = [
@@ -31,7 +33,10 @@ __all__ = [
     "Appointment",
     "WorkshopOrder",
     "WorkshopOrderItem",
+    "MaintenancePlan",
+    "MaintenanceTask",
     "Invoice",
     "InvoiceItem",
+    "Document",
     "AuditLog",
 ]

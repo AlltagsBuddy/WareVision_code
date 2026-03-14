@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.appointment import Appointment
     from app.models.workshop_order import WorkshopOrder
     from app.models.invoice import Invoice
+    from app.models.document import Document
 
 
 class Customer(BaseModel):
@@ -38,6 +39,7 @@ class Customer(BaseModel):
     appointments = relationship("Appointment", back_populates="customer")
     workshop_orders = relationship("WorkshopOrder", back_populates="customer")
     invoices = relationship("Invoice", back_populates="customer")
+    documents = relationship("Document", back_populates="customer")
 
 
 class CustomerAddress(BaseModel):

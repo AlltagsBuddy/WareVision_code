@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { workshopOrdersApi, customersApi, vehiclesApi } from '../api/client'
+import { workshopOrdersApi, customersApi, vehiclesApi, articlesApi } from '../api/client'
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'Neu',
@@ -8,6 +8,12 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Abgeschlossen',
   invoiced: 'Abgerechnet',
   cancelled: 'Storniert',
+}
+
+const ITEM_TYPE_LABELS: Record<string, string> = {
+  labor: 'Arbeit',
+  material: 'Teile',
+  service: 'Service',
 }
 
 export default function WorkshopOrders() {
@@ -28,6 +34,21 @@ export default function WorkshopOrders() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [detailOrder, setDetailOrder] = useState<any | null>(null)
+  const [items, setItems] = useState<any[]>([])
+  const [articles, setArticles] = useState<any[]>([])
+  const [showItemForm, setShowItemForm] = useState(false)
+  const [itemForm, setItemForm] = useState({
+    item_type: 'labor' as string,
+    article_id: '',
+    description: '',
+    quantity: 1,
+    unit: 'Std.',
+    unit_price: 0,
+    vat_rate: 19,
+  })
+  const [itemSubmitting, setItemSubmitting] = useState(false)
+  const [itemError, setItemError] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -52,6 +73,80 @@ export default function WorkshopOrders() {
       setForm((f) => ({ ...f, vehicle_id: '' }))
     }
   }, [form.customer_id])
+
+  const openDetail = async (order: any) => {
+    setDetailOrder(order)
+    setShowItemForm(false)
+    articlesApi.list().then(setArticles)
+    workshopOrdersApi.getItems(order.id).then(setItems)
+  }
+
+  const closeDetail = () => {
+    setDetailOrder(null)
+    setItems([])
+  }
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!detailOrder || !itemForm.description.trim()) {
+      setItemError('Bitte Beschreibung angeben.')
+      return
+    }
+    setItemSubmitting(true)
+    setItemError('')
+    try {
+      const data = {
+        item_type: itemForm.item_type,
+        description: itemForm.description.trim(),
+        quantity: itemForm.quantity,
+        unit: itemForm.unit || undefined,
+        unit_price: itemForm.unit_price,
+        vat_rate: itemForm.vat_rate,
+        ...(itemForm.item_type === 'material' && itemForm.article_id ? { article_id: itemForm.article_id } : {}),
+      }
+      await workshopOrdersApi.addItem(detailOrder.id, data)
+      const updated = await workshopOrdersApi.getItems(detailOrder.id)
+      setItems(updated)
+      setShowItemForm(false)
+      setItemForm({
+        item_type: 'labor',
+        article_id: '',
+        description: '',
+        quantity: 1,
+        unit: 'Std.',
+        unit_price: 0,
+        vat_rate: 19,
+      })
+    } catch (err) {
+      setItemError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setItemSubmitting(false)
+    }
+  }
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!detailOrder || !confirm('Position wirklich entfernen?')) return
+    try {
+      await workshopOrdersApi.deleteItem(detailOrder.id, itemId)
+      setItems((prev) => prev.filter((i) => i.id !== itemId))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!detailOrder) return
+    try {
+      await workshopOrdersApi.update(detailOrder.id, { status: newStatus })
+      setDetailOrder((o: any) => ({ ...o, status: newStatus }))
+      const updated = await workshopOrdersApi.list({ status_filter: statusFilter || undefined })
+      setOrders(updated)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const itemsTotal = items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unit_price), 0)
 
   const getCustomerName = (customerId: string) => {
     const c = customers.find((x) => x.id === customerId)
@@ -236,7 +331,7 @@ export default function WorkshopOrders() {
               </tr>
             ) : (
               orders.map((o) => (
-                <tr key={o.id}>
+                <tr key={o.id} onClick={() => openDetail(o)} style={{ cursor: 'pointer' }}>
                   <td><strong>{o.order_number}</strong></td>
                   <td>{STATUS_LABELS[o.status] || o.status}</td>
                   <td>{getCustomerName(o.customer_id)}</td>
@@ -248,6 +343,180 @@ export default function WorkshopOrders() {
             )}
           </tbody>
         </table>
+      )}
+
+      {detailOrder && (
+        <div className="modal-overlay" onClick={closeDetail}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Auftrag {detailOrder.order_number}</h2>
+            <p>
+              <strong>Kunde:</strong> {getCustomerName(detailOrder.customer_id)} &nbsp;
+              <strong>Fahrzeug:</strong> {getVehicleLabel(detailOrder.vehicle_id)}
+            </p>
+            <p>{detailOrder.complaint_description || '–'}</p>
+            <div className="form-row" style={{ marginBottom: '1rem' }}>
+              <label>Status:</label>
+              <select
+                value={detailOrder.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="select"
+              >
+                {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+
+            <h3>Positionen</h3>
+            {items.length === 0 ? (
+              <p>Keine Positionen.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Typ</th>
+                    <th>Beschreibung</th>
+                    <th>Menge</th>
+                    <th>Einheit</th>
+                    <th>Preis</th>
+                    <th>Gesamt</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((i) => (
+                    <tr key={i.id}>
+                      <td>{ITEM_TYPE_LABELS[i.item_type] || i.item_type}</td>
+                      <td>{i.description}</td>
+                      <td>{Number(i.quantity)}</td>
+                      <td>{i.unit || '–'}</td>
+                      <td>{Number(i.unit_price).toFixed(2)} €</td>
+                      <td>{(Number(i.quantity) * Number(i.unit_price)).toFixed(2)} €</td>
+                      <td>
+                        <button type="button" onClick={() => handleDeleteItem(i.id)} className="btn-secondary btn-sm">Entfernen</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={5}><strong>Summe</strong></td>
+                    <td><strong>{itemsTotal.toFixed(2)} €</strong></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+
+            {!showItemForm ? (
+              <button type="button" onClick={() => setShowItemForm(true)} className="btn-primary" style={{ marginTop: '0.5rem' }}>
+                + Position hinzufügen
+              </button>
+            ) : (
+              <form onSubmit={handleAddItem} style={{ marginTop: '1rem', padding: '1rem', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                <h4>Neue Position</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Typ</label>
+                    <select
+                      value={itemForm.item_type}
+                      onChange={(e) => {
+                        const t = e.target.value
+                        setItemForm({
+                          ...itemForm,
+                          item_type: t,
+                          unit: t === 'labor' ? 'Std.' : t === 'material' ? 'Stück' : '',
+                        })
+                      }}
+                    >
+                      <option value="labor">Arbeit</option>
+                      <option value="material">Teile</option>
+                      <option value="service">Service</option>
+                    </select>
+                  </div>
+                  {itemForm.item_type === 'material' && (
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label>Artikel</label>
+                      <select
+                        value={itemForm.article_id}
+                        onChange={(e) => {
+                          const a = articles.find((x) => x.id === e.target.value)
+                          setItemForm({
+                            ...itemForm,
+                            article_id: e.target.value,
+                            description: a ? a.name : itemForm.description,
+                            unit_price: a ? Number(a.sales_price_b2c) : itemForm.unit_price,
+                          })
+                        }}
+                      >
+                        <option value="">– Manuell –</option>
+                        {articles.map((a) => (
+                          <option key={a.id} value={a.id}>{a.article_number} – {a.name} ({Number(a.sales_price_b2c).toFixed(2)} €)</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label>Beschreibung *</label>
+                  <input
+                    value={itemForm.description}
+                    onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                    placeholder="z.B. Ölwechsel, Bremsbeläge"
+                    required
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Menge</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={itemForm.quantity}
+                      onChange={(e) => setItemForm({ ...itemForm, quantity: parseFloat(e.target.value) || 1 })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Einheit</label>
+                    <input
+                      value={itemForm.unit}
+                      onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}
+                      placeholder="Std. / Stück"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Preis (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={itemForm.unit_price}
+                      onChange={(e) => setItemForm({ ...itemForm, unit_price: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>MwSt %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={itemForm.vat_rate}
+                      onChange={(e) => setItemForm({ ...itemForm, vat_rate: parseFloat(e.target.value) || 19 })}
+                    />
+                  </div>
+                </div>
+                {itemError && <p className="error">{itemError}</p>}
+                <div className="form-actions">
+                  <button type="button" onClick={() => setShowItemForm(false)} className="btn-secondary">Abbrechen</button>
+                  <button type="submit" disabled={itemSubmitting} className="btn-primary">{itemSubmitting ? 'Speichern...' : 'Hinzufügen'}</button>
+                </div>
+              </form>
+            )}
+
+            <div className="form-actions" style={{ marginTop: '1.5rem' }}>
+              <button type="button" onClick={closeDetail} className="btn-secondary">Schließen</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

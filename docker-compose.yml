@@ -22,6 +22,9 @@ services:
     environment:
       DATABASE_URL: postgresql://warevision:warevision@postgres:5432/warevision
       SECRET_KEY: dev-secret-key-change-in-production
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,3 +38,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

@@ -74,6 +74,10 @@ export const manufacturersApi = {
   list: () => api<any[]>('/manufacturers'),
   create: (data: { name: string }) =>
     api<any>('/manufacturers', { method: 'POST', body: JSON.stringify(data) }),
+  getModels: (manufacturerId: string) =>
+    api<any[]>(`/manufacturers/${manufacturerId}/models`),
+  createModel: (data: { manufacturer_id: string; name: string; variant?: string }) =>
+    api<any>('/manufacturers/models', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 export const articlesApi = {
@@ -139,6 +143,59 @@ export const appointmentsApi = {
     api<void>(`/appointments/${id}`, { method: 'DELETE' }),
 }
 
+export const documentsApi = {
+  list: (params?: { customer_id?: string; vehicle_id?: string; skip?: number; limit?: number }) => {
+    const p = new URLSearchParams()
+    if (params?.customer_id) p.set('customer_id', params.customer_id)
+    if (params?.vehicle_id) p.set('vehicle_id', params.vehicle_id)
+    if (params?.skip != null) p.set('skip', String(params.skip))
+    if (params?.limit != null) p.set('limit', String(params.limit))
+    return api<any[]>('/documents?' + p)
+  },
+  upload: async (file: File, customerId?: string, vehicleId?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (customerId) formData.append('customer_id', customerId)
+    if (vehicleId) formData.append('vehicle_id', vehicleId)
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/documents`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (res.status === 401) {
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+      throw new Error('Unauthorized')
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || res.statusText || 'Fehler')
+    }
+    return res.json()
+  },
+  get: (id: string) => api<any>(`/documents/${id}`),
+  update: (id: string, data: { customer_id?: string; vehicle_id?: string }) =>
+    api<any>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    api<void>(`/documents/${id}`, { method: 'DELETE' }),
+  getDownloadUrl: (id: string) => `${API_BASE}/documents/${id}/download`,
+  download: async (id: string, filename: string): Promise<void> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/documents/${id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Download fehlgeschlagen')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+}
+
 export const invoicesApi = {
   list: (params?: { customer_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
@@ -171,6 +228,32 @@ export const invoicesApi = {
   },
 }
 
+export const maintenancePlansApi = {
+  list: (params?: { manufacturer_id?: string; vehicle_model_id?: string }) => {
+    const p = new URLSearchParams()
+    if (params?.manufacturer_id) p.set('manufacturer_id', params.manufacturer_id)
+    if (params?.vehicle_model_id) p.set('vehicle_model_id', params.vehicle_model_id)
+    return api<any[]>('/maintenance-plans?' + p)
+  },
+  create: (data: {
+    manufacturer_id: string
+    vehicle_model_id?: string
+    name: string
+    description?: string
+    interval_km?: number
+    interval_hours?: number
+    interval_months?: number
+  }) => api<any>('/maintenance-plans', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id: string) => api<any>(`/maintenance-plans/${id}`),
+  delete: (id: string) =>
+    api<void>(`/maintenance-plans/${id}`, { method: 'DELETE' }),
+  getTasks: (planId: string) => api<any[]>(`/maintenance-plans/${planId}/tasks`),
+  addTask: (planId: string, data: { name: string; description?: string; sort_order?: number }) =>
+    api<any>(`/maintenance-plans/${planId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteTask: (planId: string, taskId: string) =>
+    api<void>(`/maintenance-plans/${planId}/tasks/${taskId}`, { method: 'DELETE' }),
+}
+
 export const workshopOrdersApi = {
   list: (params?: { customer_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
@@ -191,4 +274,18 @@ export const workshopOrdersApi = {
     estimated_work_minutes?: number
   }) => api<any>('/workshop-orders', { method: 'POST', body: JSON.stringify(data) }),
   get: (id: string) => api<any>(`/workshop-orders/${id}`),
+  update: (id: string, data: { status?: string; actual_work_minutes?: number; internal_notes?: string }) =>
+    api<any>(`/workshop-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getItems: (orderId: string) => api<any[]>(`/workshop-orders/${orderId}/items`),
+  addItem: (orderId: string, data: {
+    item_type: string
+    article_id?: string
+    description: string
+    quantity?: number
+    unit?: string
+    unit_price?: number
+    vat_rate?: number
+  }) => api<any>(`/workshop-orders/${orderId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteItem: (orderId: string, itemId: string) =>
+    api<void>(`/workshop-orders/${orderId}/items/${itemId}`, { method: 'DELETE' }),
 }

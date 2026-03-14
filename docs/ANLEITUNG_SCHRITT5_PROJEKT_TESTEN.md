@@ -399,7 +399,12 @@ Dann C.3 nochmal ausführen.
    - Kunden
    - Fahrzeuge
    - Artikel
-   - Lager
+   - Lager (inkl. Wareneingang/-ausgang)
+   - Werkstattaufträge (inkl. Positionen: Arbeit/Teile)
+   - Wartungspläne
+   - Terminplaner
+   - Rechnungen
+   - Dokumente
 
 2. **Erwartete Anzeige:** Jede Seite lädt ohne Fehler (Leere Tabellen sind ok)
 
@@ -410,6 +415,21 @@ Dann C.3 nochmal ausführen.
 1. **Rechts oben:** „Abmelden“ klicken
 
 2. **Erwartete Anzeige:** Zurück zur Login-Seite
+
+---
+
+## Alternative: Mit Docker starten
+
+**Schnellstart** (wenn Docker installiert):
+
+```
+cd d:\WareVision\WareVision_code
+docker compose up -d --build
+```
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- Login: admin@warevision.local / admin123
 
 ---
 
@@ -434,7 +454,7 @@ Dann C.3 nochmal ausführen.
 - [ ] Frontend startet (`npm run dev`)
 - [ ] http://localhost:5173 zeigt Login-Seite
 - [ ] Login mit admin@warevision.local / admin123 funktioniert
-- [ ] Dashboard und Navigation funktionieren
+- [ ] Dashboard und Navigation funktionieren (Kunden, Fahrzeuge, Artikel, Lager, Werkstattaufträge, Wartungspläne, Terminplaner, Rechnungen, Dokumente)
 
 ---
 

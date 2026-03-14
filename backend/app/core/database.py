@@ -35,8 +35,11 @@ def init_db() -> None:
         Appointment,
         WorkshopOrder,
         WorkshopOrderItem,
+        MaintenancePlan,
+        MaintenanceTask,
         Invoice,
         InvoiceItem,
+        Document,
         AuditLog,
     )
 

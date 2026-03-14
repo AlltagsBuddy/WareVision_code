@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.vehicle_model import VehicleModel
     from app.models.workshop_order import WorkshopOrder
     from app.models.appointment import Appointment
+    from app.models.document import Document
 
 
 class Vehicle(BaseModel):
@@ -53,3 +54,4 @@ class Vehicle(BaseModel):
     vehicle_model = relationship("VehicleModel", back_populates="vehicles")
     workshop_orders = relationship("WorkshopOrder", back_populates="vehicle")
     appointments = relationship("Appointment", back_populates="vehicle")
+    documents = relationship("Document", back_populates="vehicle")

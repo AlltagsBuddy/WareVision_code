@@ -20,6 +20,23 @@ class WorkshopOrderItemCreate(BaseModel):
     vat_rate: Decimal = 19.00
 
 
+class WorkshopOrderItemRead(BaseModel):
+    """Workshop order item read."""
+
+    id: UUID
+    workshop_order_id: UUID
+    item_type: str
+    article_id: Optional[UUID] = None
+    description: str
+    quantity: Decimal
+    unit: Optional[str] = None
+    unit_price: Decimal
+    vat_rate: Decimal
+
+    class Config:
+        from_attributes = True
+
+
 class WorkshopOrderCreate(BaseModel):
     """Create workshop order."""
 
@@ -31,6 +48,14 @@ class WorkshopOrderCreate(BaseModel):
     mileage_at_checkin: Optional[int] = None
     operating_hours_at_checkin: Optional[int] = None
     estimated_work_minutes: Optional[int] = None
+
+
+class WorkshopOrderUpdate(BaseModel):
+    """Update workshop order."""
+
+    status: Optional[str] = None
+    actual_work_minutes: Optional[int] = None
+    internal_notes: Optional[str] = None
 
 
 class WorkshopOrderRead(BaseModel):

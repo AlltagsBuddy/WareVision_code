@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Uploads
+    UPLOAD_DIR: str = "uploads"
+
 
 @lru_cache
 def get_settings() -> Settings:
