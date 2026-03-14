@@ -10,8 +10,16 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.appointment import Appointment
+from app.models.customer import Customer
+from app.models.manufacturer import Manufacturer
+from app.models.vehicle import Vehicle
 from app.models.user import User
-from app.schemas.appointment import AppointmentCreate, AppointmentRead, AppointmentUpdate
+from app.schemas.appointment import (
+    AppointmentCreate,
+    AppointmentRead,
+    AppointmentUpdate,
+    ExternalAppointmentImport,
+)
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -89,6 +97,116 @@ def create_appointment(
     return apt
 
 
+@router.post("/import-external", response_model=AppointmentRead)
+def import_external_appointment(
+    payload: ExternalAppointmentImport,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Appointment:
+    """
+    Import appointment from external system (Termin-Marktplatz etc.).
+    Dublettenschutz: Bei gleicher external_booking_id wird der bestehende Termin zurückgegeben.
+    """
+    existing = (
+        db.query(Appointment)
+        .filter(Appointment.external_booking_id == payload.external_booking_id)
+        .first()
+    )
+    if existing:
+        return existing
+
+    try:
+        starts_at = datetime.fromisoformat(payload.starts_at.replace("Z", "+00:00"))
+        ends_at = datetime.fromisoformat(payload.ends_at.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültiges Datumsformat (ISO 8601 erwartet)",
+        )
+    if starts_at >= ends_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ende muss nach Beginn liegen",
+        )
+
+    customer_id = None
+    if payload.customer_email or payload.customer_first_name or payload.customer_last_name:
+        email = (payload.customer_email or "").strip().lower()
+        customer = (
+            db.query(Customer).filter(Customer.email == email).first()
+            if email
+            else None
+        )
+        if not customer:
+            customer = Customer(
+                customer_type="B2C",
+                first_name=payload.customer_first_name or "",
+                last_name=payload.customer_last_name or "",
+                email=payload.customer_email or None,
+                phone=payload.customer_phone or None,
+            )
+            db.add(customer)
+            db.flush()
+        customer_id = customer.id
+
+    vehicle_id = None
+    if customer_id and (payload.vehicle_license_plate or payload.vehicle_vin):
+        manufacturer = db.query(Manufacturer).filter(Manufacturer.name == "Sonstige").first()
+        if not manufacturer:
+            manufacturer = Manufacturer(name="Sonstige")
+            db.add(manufacturer)
+            db.flush()
+
+        vehicle = None
+        if payload.vehicle_license_plate:
+            vehicle = (
+                db.query(Vehicle)
+                .filter(
+                    Vehicle.customer_id == customer_id,
+                    Vehicle.license_plate == payload.vehicle_license_plate,
+                )
+                .first()
+            )
+        if not vehicle and payload.vehicle_vin:
+            vehicle = (
+                db.query(Vehicle)
+                .filter(
+                    Vehicle.customer_id == customer_id,
+                    Vehicle.vin == payload.vehicle_vin,
+                )
+                .first()
+            )
+        if not vehicle:
+            vehicle = Vehicle(
+                customer_id=customer_id,
+                manufacturer_id=manufacturer.id,
+                category="motorcycle",
+                license_plate=payload.vehicle_license_plate,
+                vin=payload.vehicle_vin,
+            )
+            db.add(vehicle)
+            db.flush()
+        vehicle_id = vehicle.id
+
+    apt = Appointment(
+        customer_id=customer_id,
+        vehicle_id=vehicle_id,
+        appointment_type="workshop",
+        source="termin_marktplatz",
+        external_booking_id=payload.external_booking_id,
+        status="planned",
+        title=payload.title or "Termin (extern importiert)",
+        description=payload.description,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        created_by=current_user.id,
+    )
+    db.add(apt)
+    db.commit()
+    db.refresh(apt)
+    return apt
+
+
 @router.get("/{appointment_id}", response_model=AppointmentRead)
 def get_appointment(
     appointment_id: UUID,
@@ -145,6 +263,117 @@ def update_appointment(
         apt.starts_at = payload.starts_at
     if payload.ends_at is not None:
         apt.ends_at = payload.ends_at
+    db.commit()
+    db.refresh(apt)
+    return apt
+
+
+@router.post("/import-external", response_model=AppointmentRead)
+def import_external_appointment(
+    payload: ExternalAppointmentImport,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Appointment:
+    """
+    Import appointment from external system (Termin-Marktplatz etc.).
+    Dublettenschutz: Bei gleicher external_booking_id wird der bestehende Termin zurückgegeben.
+    """
+    existing = (
+        db.query(Appointment)
+        .filter(Appointment.external_booking_id == payload.external_booking_id)
+        .first()
+    )
+    if existing:
+        return existing
+
+    try:
+        starts_at = datetime.fromisoformat(payload.starts_at.replace("Z", "+00:00"))
+        ends_at = datetime.fromisoformat(payload.ends_at.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültiges Datumsformat (ISO 8601 erwartet)",
+        )
+    if starts_at >= ends_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ende muss nach Beginn liegen",
+        )
+
+    customer_id = None
+    if payload.customer_email or payload.customer_first_name or payload.customer_last_name:
+        email = (payload.customer_email or "").strip().lower()
+        customer = (
+            db.query(Customer).filter(Customer.email == email).first()
+            if email
+            else None
+        )
+        if not customer:
+            name = f"{payload.customer_first_name or ''} {payload.customer_last_name or ''}".strip() or "Externer Kunde"
+            customer = Customer(
+                customer_type="B2C",
+                first_name=payload.customer_first_name or "",
+                last_name=payload.customer_last_name or "",
+                email=payload.customer_email or None,
+                phone=payload.customer_phone or None,
+            )
+            db.add(customer)
+            db.flush()
+        customer_id = customer.id
+
+    vehicle_id = None
+    if customer_id and (payload.vehicle_license_plate or payload.vehicle_vin):
+        manufacturer = db.query(Manufacturer).filter(Manufacturer.name == "Sonstige").first()
+        if not manufacturer:
+            manufacturer = Manufacturer(name="Sonstige")
+            db.add(manufacturer)
+            db.flush()
+
+        vehicle = None
+        if payload.vehicle_license_plate:
+            vehicle = (
+                db.query(Vehicle)
+                .filter(
+                    Vehicle.customer_id == customer_id,
+                    Vehicle.license_plate == payload.vehicle_license_plate,
+                )
+                .first()
+            )
+        if not vehicle and payload.vehicle_vin:
+            vehicle = (
+                db.query(Vehicle)
+                .filter(
+                    Vehicle.customer_id == customer_id,
+                    Vehicle.vin == payload.vehicle_vin,
+                )
+                .first()
+            )
+        if not vehicle:
+            vehicle = Vehicle(
+                customer_id=customer_id,
+                manufacturer_id=manufacturer.id,
+                category="motorcycle",
+                license_plate=payload.vehicle_license_plate,
+                vin=payload.vehicle_vin,
+            )
+            db.add(vehicle)
+            db.flush()
+        vehicle_id = vehicle.id
+
+    apt = Appointment(
+        customer_id=customer_id,
+        vehicle_id=vehicle_id,
+        appointment_type="workshop",
+        source="termin_marktplatz",
+        external_booking_id=payload.external_booking_id,
+        status="planned",
+        title=payload.title or "Termin (extern importiert)",
+        description=payload.description,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        created_by=current_user.id,
+    )
+    db.add(apt)
     db.commit()
     db.refresh(apt)
     return apt

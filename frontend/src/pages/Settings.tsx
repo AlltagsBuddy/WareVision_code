@@ -6,6 +6,7 @@ export default function Settings() {
     company_name: '',
     company_address: '',
     company_vat_id: '',
+    termin_marktplatz_api_key: '',
   })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -20,6 +21,7 @@ export default function Settings() {
           company_name: data.company_name || '',
           company_address: data.company_address || '',
           company_vat_id: data.company_vat_id || '',
+          termin_marktplatz_api_key: '',
         })
       )
       .catch(() => setError('Einstellungen konnten nicht geladen werden.'))
@@ -32,7 +34,12 @@ export default function Settings() {
     setSuccess(false)
     setSubmitting(true)
     try {
-      await settingsApi.update(form)
+      await settingsApi.update({
+        company_name: form.company_name,
+        company_address: form.company_address,
+        company_vat_id: form.company_vat_id,
+        termin_marktplatz_api_key: form.termin_marktplatz_api_key,
+      })
       setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler beim Speichern')
@@ -77,6 +84,16 @@ export default function Settings() {
             value={form.company_vat_id}
             onChange={(e) => setForm((f) => ({ ...f, company_vat_id: e.target.value }))}
             placeholder="DE123456789"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="termin_marktplatz_api_key">Termin-Marktplatz API-Schlüssel</label>
+          <input
+            id="termin_marktplatz_api_key"
+            type="password"
+            value={form.termin_marktplatz_api_key}
+            onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_api_key: e.target.value }))}
+            placeholder="Optional – für Webhook-Authentifizierung"
           />
         </div>
         {error && <p className="error">{error}</p>}

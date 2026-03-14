@@ -12,7 +12,7 @@ from app.schemas.app_setting import AppSettingsOut, AppSettingsUpdate
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-_SETTING_KEYS = ("company_name", "company_address", "company_vat_id")
+_SETTING_KEYS = ("company_name", "company_address", "company_vat_id", "termin_marktplatz_api_key")
 
 
 def _settings_to_dict(db: Session) -> dict[str, str]:
@@ -33,6 +33,12 @@ def get_settings(
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),
     )
+
+
+def _get_api_key(db: Session) -> str | None:
+    """Get termin_marktplatz_api_key (not exposed in GET)."""
+    row = db.query(AppSetting).filter(AppSetting.key == "termin_marktplatz_api_key").first()
+    return row.value if row and row.value else None
 
 
 @router.patch("", response_model=AppSettingsOut)

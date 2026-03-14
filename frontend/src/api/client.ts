@@ -45,7 +45,7 @@ export const authApi = {
 
 export const settingsApi = {
   get: () => api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings'),
-  update: (data: { company_name?: string; company_address?: string; company_vat_id?: string }) =>
+  update: (data: { company_name?: string; company_address?: string; company_vat_id?: string; termin_marktplatz_api_key?: string }) =>
     api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -178,6 +178,19 @@ export const appointmentsApi = {
     starts_at: string
     ends_at: string
   }) => api<any>('/appointments', { method: 'POST', body: JSON.stringify(data) }),
+  importExternal: (data: {
+    external_booking_id: string
+    starts_at: string
+    ends_at: string
+    customer_first_name?: string
+    customer_last_name?: string
+    customer_email?: string
+    customer_phone?: string
+    vehicle_license_plate?: string
+    vehicle_vin?: string
+    title?: string
+    description?: string
+  }) => api<any>('/appointments/import-external', { method: 'POST', body: JSON.stringify(data) }),
   get: (id: string) => api<any>(`/appointments/${id}`),
   update: (id: string, data: Record<string, unknown>) =>
     api<any>(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -224,6 +237,14 @@ export const documentsApi = {
   delete: (id: string) =>
     api<void>(`/documents/${id}`, { method: 'DELETE' }),
   getDownloadUrl: (id: string) => `${API_BASE}/documents/${id}/download`,
+  getBlob: async (id: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/documents/${id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Laden fehlgeschlagen')
+    return res.blob()
+  },
   download: async (id: string, filename: string): Promise<void> => {
     const token = getToken()
     const res = await fetch(`${API_BASE}/documents/${id}/download`, {
@@ -271,6 +292,14 @@ export const invoicesApi = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!res.ok) throw new Error('PDF konnte nicht geladen werden')
+    return res.blob()
+  },
+  downloadZugferd: async (id: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/invoices/${id}/zugferd`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('ZUGFeRD konnte nicht geladen werden')
     return res.blob()
   },
 }

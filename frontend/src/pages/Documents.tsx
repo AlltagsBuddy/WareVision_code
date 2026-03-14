@@ -2,6 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { documentsApi, customersApi, vehiclesApi } from '../api/client'
 
 const ALLOWED_EXT = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']
+const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+
+const isImageDoc = (filename: string) => {
+  const ext = '.' + (filename.split('.').pop()?.toLowerCase() || '')
+  return IMAGE_EXT.includes(ext)
+}
 
 export default function Documents() {
   const [documents, setDocuments] = useState<any[]>([])
@@ -16,7 +22,13 @@ export default function Documents() {
   const [assignForm, setAssignForm] = useState({ customer_id: '', vehicle_id: '' })
   const [textModal, setTextModal] = useState<{ doc: any } | null>(null)
   const [extractingId, setExtractingId] = useState<string | null>(null)
+  const [cameraModal, setCameraModal] = useState(false)
+  const [cameraError, setCameraError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => () => stopCamera(), [])
 
   useEffect(() => {
     Promise.all([
@@ -75,7 +87,7 @@ export default function Documents() {
           setUploadError(`Dateityp nicht erlaubt: ${file.name}`)
           continue
         }
-        await documentsApi.upload(file)
+        await documentsApi.upload(file, customerFilter || undefined, vehicleFilter || undefined)
       }
       const updated = await documentsApi.list({
         customer_id: customerFilter || undefined,
@@ -87,6 +99,75 @@ export default function Documents() {
     } finally {
       setUploading(false)
       e.target.value = ''
+    }
+  }
+
+  const startCamera = async () => {
+    setCameraError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      streamRef.current = stream
+      if (videoRef.current) videoRef.current.srcObject = stream
+    } catch (err) {
+      setCameraError('Kamera-Zugriff fehlgeschlagen. Bitte Berechtigung prüfen.')
+    }
+  }
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+  }
+
+  const capturePhoto = async () => {
+    if (!videoRef.current) return
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0)
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) return
+        setUploading(true)
+        setCameraError('')
+        try {
+          const file = new File([blob], `Foto_${new Date().toISOString().slice(0, 10)}_${Date.now()}.jpg`, {
+            type: 'image/jpeg',
+          })
+          await documentsApi.upload(file, customerFilter || undefined, vehicleFilter || undefined)
+          const updated = await documentsApi.list({
+            customer_id: customerFilter || undefined,
+            vehicle_id: vehicleFilter || undefined,
+          })
+          setDocuments(updated)
+          setCameraModal(false)
+          stopCamera()
+        } catch (err) {
+          setCameraError(err instanceof Error ? err.message : 'Upload fehlgeschlagen')
+        } finally {
+          setUploading(false)
+        }
+      },
+      'image/jpeg',
+      0.9
+    )
+  }
+
+  const openPreview = async (doc: any) => {
+    if (!isImageDoc(doc.filename)) return
+    try {
+      const blob = await documentsApi.getBlob(doc.id)
+      const url = URL.createObjectURL(blob)
+      setPreviewModal({ doc, url })
+    } catch {
+      setUploadError('Vorschau konnte nicht geladen werden')
+    }
+  }
+
+  const closePreview = () => {
+    if (previewModal) {
+      URL.revokeObjectURL(previewModal.url)
+      setPreviewModal(null)
     }
   }
 
@@ -226,6 +307,55 @@ export default function Documents() {
         </div>
       )}
 
+      {cameraModal && (
+        <div className="modal-overlay" onClick={() => { setCameraModal(false); stopCamera() }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Foto aufnehmen</h2>
+            <div style={{ position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden', minHeight: 300 }}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: '100%', display: 'block' }}
+              />
+            </div>
+            {cameraError && <p className="error" style={{ marginTop: '0.5rem' }}>{cameraError}</p>}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => { setCameraModal(false); stopCamera() }} className="btn-secondary">
+                Abbrechen
+              </button>
+              <button type="button" onClick={capturePhoto} disabled={uploading} className="btn-primary">
+                {uploading ? 'Wird hochgeladen...' : 'Aufnehmen & Hochladen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewModal && (
+        <div className="modal-overlay" onClick={closePreview}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Bildvorschau: {previewModal.doc.filename}</h2>
+            <div style={{ textAlign: 'center', maxHeight: '70vh', overflow: 'auto' }}>
+              <img
+                src={previewModal.url}
+                alt={previewModal.doc.filename}
+                style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
+              />
+            </div>
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={closePreview} className="btn-secondary">
+                Schließen
+              </button>
+              <button type="button" onClick={() => { handleDownload(previewModal.doc); closePreview() }} className="btn-primary">
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {assignModal && (
         <div className="modal-overlay" onClick={() => setAssignModal(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -307,6 +437,15 @@ export default function Documents() {
                   <td>{getVehicleLabel(doc.vehicle_id)}</td>
                   <td>{formatDate(doc.created_at)}</td>
                   <td>
+                    {isImageDoc(doc.filename) && (
+                      <button
+                        type="button"
+                        onClick={() => openPreview(doc)}
+                        className="btn-secondary btn-sm"
+                      >
+                        Vorschau
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleDownload(doc)}

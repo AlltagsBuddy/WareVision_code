@@ -42,6 +42,21 @@ export default function Appointments() {
   const [formVehicles, setFormVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showImportForm, setShowImportForm] = useState(false)
+  const [importForm, setImportForm] = useState({
+    external_booking_id: '',
+    date: '',
+    startTime: '09:00',
+    endTime: '10:00',
+    customer_first_name: '',
+    customer_last_name: '',
+    customer_email: '',
+    customer_phone: '',
+    vehicle_license_plate: '',
+    vehicle_vin: '',
+    title: '',
+    description: '',
+  })
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
@@ -149,6 +164,66 @@ export default function Appointments() {
     }
   }
 
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!importForm.external_booking_id.trim()) {
+      setError('Externe Buchungs-ID erforderlich.')
+      return
+    }
+    const dateStr = importForm.date || weekDates[0].toISOString().slice(0, 10)
+    const [sh, sm] = importForm.startTime.split(':').map(Number)
+    const [eh, em] = importForm.endTime.split(':').map(Number)
+    const startsAt = new Date(dateStr)
+    startsAt.setHours(sh, sm, 0, 0)
+    const endsAt = new Date(dateStr)
+    endsAt.setHours(eh, em, 0, 0)
+    if (startsAt >= endsAt) {
+      setError('Ende muss nach Beginn liegen.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await appointmentsApi.importExternal({
+        external_booking_id: importForm.external_booking_id.trim(),
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        customer_first_name: importForm.customer_first_name || undefined,
+        customer_last_name: importForm.customer_last_name || undefined,
+        customer_email: importForm.customer_email || undefined,
+        customer_phone: importForm.customer_phone || undefined,
+        vehicle_license_plate: importForm.vehicle_license_plate || undefined,
+        vehicle_vin: importForm.vehicle_vin || undefined,
+        title: importForm.title || undefined,
+        description: importForm.description || undefined,
+      })
+      setShowImportForm(false)
+      setImportForm({
+        external_booking_id: '',
+        date: '',
+        startTime: '09:00',
+        endTime: '10:00',
+        customer_first_name: '',
+        customer_last_name: '',
+        customer_email: '',
+        customer_phone: '',
+        vehicle_license_plate: '',
+        vehicle_vin: '',
+        title: '',
+        description: '',
+      })
+      const updated = await appointmentsApi.list({
+        from_date: fromDate.toISOString(),
+        to_date: toDate.toISOString(),
+      })
+      setAppointments(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fehler beim Import')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleCancel = async (id: string) => {
     if (!confirm('Termin wirklich stornieren?')) return
     try {
@@ -192,6 +267,9 @@ export default function Appointments() {
         </div>
         <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
           + Neuer Termin
+        </button>
+        <button type="button" onClick={() => setShowImportForm(true)} className="btn-secondary">
+          Extern importieren
         </button>
       </div>
 
@@ -303,6 +381,136 @@ export default function Appointments() {
                 </button>
                 <button type="submit" disabled={submitting} className="btn-primary">
                   {submitting ? 'Wird erstellt...' : 'Termin anlegen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showImportForm && (
+        <div className="modal-overlay" onClick={() => setShowImportForm(false)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Externen Termin importieren</h2>
+            <p className="muted" style={{ marginBottom: '1rem' }}>
+              Termine von Termin-Marktplatz oder anderen Buchungssystemen manuell importieren.
+            </p>
+            <form onSubmit={handleImportSubmit}>
+              <div className="form-group">
+                <label htmlFor="imp-ext-id">Externe Buchungs-ID *</label>
+                <input
+                  id="imp-ext-id"
+                  type="text"
+                  value={importForm.external_booking_id}
+                  onChange={(e) => setImportForm({ ...importForm, external_booking_id: e.target.value })}
+                  placeholder="z.B. TMP-2024-001"
+                  required
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Datum *</label>
+                  <input
+                    type="date"
+                    value={importForm.date || weekDates[0].toISOString().slice(0, 10)}
+                    onChange={(e) => setImportForm({ ...importForm, date: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Von</label>
+                  <input
+                    type="time"
+                    value={importForm.startTime}
+                    onChange={(e) => setImportForm({ ...importForm, startTime: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Bis</label>
+                  <input
+                    type="time"
+                    value={importForm.endTime}
+                    onChange={(e) => setImportForm({ ...importForm, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Kunde Vorname</label>
+                  <input
+                    type="text"
+                    value={importForm.customer_first_name}
+                    onChange={(e) => setImportForm({ ...importForm, customer_first_name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Kunde Nachname</label>
+                  <input
+                    type="text"
+                    value={importForm.customer_last_name}
+                    onChange={(e) => setImportForm({ ...importForm, customer_last_name: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>E-Mail</label>
+                  <input
+                    type="email"
+                    value={importForm.customer_email}
+                    onChange={(e) => setImportForm({ ...importForm, customer_email: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Telefon</label>
+                  <input
+                    type="text"
+                    value={importForm.customer_phone}
+                    onChange={(e) => setImportForm({ ...importForm, customer_phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Kennzeichen</label>
+                  <input
+                    type="text"
+                    value={importForm.vehicle_license_plate}
+                    onChange={(e) => setImportForm({ ...importForm, vehicle_license_plate: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>FIN</label>
+                  <input
+                    type="text"
+                    value={importForm.vehicle_vin}
+                    onChange={(e) => setImportForm({ ...importForm, vehicle_vin: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Titel</label>
+                <input
+                  type="text"
+                  value={importForm.title}
+                  onChange={(e) => setImportForm({ ...importForm, title: e.target.value })}
+                  placeholder="z.B. Ölwechsel"
+                />
+              </div>
+              <div className="form-group">
+                <label>Beschreibung</label>
+                <textarea
+                  value={importForm.description}
+                  onChange={(e) => setImportForm({ ...importForm, description: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              {error && <p className="error">{error}</p>}
+              <div className="form-actions">
+                <button type="button" onClick={() => setShowImportForm(false)} className="btn-secondary">
+                  Abbrechen
+                </button>
+                <button type="submit" disabled={submitting} className="btn-primary">
+                  {submitting ? 'Wird importiert...' : 'Importieren'}
                 </button>
               </div>
             </form>

@@ -30,6 +30,10 @@ uuid6==2024.7.10
 # PDF
 reportlab==4.0.9
 
+# ZUGFeRD / Factur-X
+factur-x==3.16.0
+drafthorse>=2025.1.0
+
 # OCR
 pytesseract==0.3.10
 Pillow==10.2.0

@@ -17,3 +17,4 @@ class AppSettingsUpdate(BaseModel):
     company_name: str | None = None
     company_address: str | None = None
     company_vat_id: str | None = None
+    termin_marktplatz_api_key: str | None = None

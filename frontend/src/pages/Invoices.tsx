@@ -168,6 +168,20 @@ export default function Invoices() {
     }
   }
 
+  const handleDownloadZugferd = async (id: string, invoiceNumber: string) => {
+    try {
+      const blob = await invoicesApi.downloadZugferd(id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Rechnung_${invoiceNumber}_ZUGFeRD.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'ZUGFeRD konnte nicht geladen werden')
+    }
+  }
+
   const addItem = () => {
     setForm((f) => ({ ...f, items: [...f.items, { description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] }))
   }
@@ -406,16 +420,32 @@ export default function Invoices() {
                         >
                           PDF
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadZugferd(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          ZUGFeRD
+                        </button>
                       </>
                     )}
                     {(inv.status === 'paid') && (
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
-                        className="btn-secondary btn-sm"
-                      >
-                        PDF
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadZugferd(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          ZUGFeRD
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>

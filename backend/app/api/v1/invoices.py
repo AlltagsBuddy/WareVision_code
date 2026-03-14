@@ -259,3 +259,24 @@ def get_invoice_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
     pdf_bytes = generate_invoice_pdf(db, inv)
     return Response(content=pdf_bytes, media_type="application/pdf")
+
+
+@router.get("/{invoice_id}/zugferd")
+def get_invoice_zugferd(
+    invoice_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    """Generate and return invoice as ZUGFeRD/Factur-X PDF (e-invoice with embedded XML)."""
+    from app.services.zugferd import generate_zugferd_pdf
+
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    pdf_bytes = generate_zugferd_pdf(db, inv)
+    filename = f"Rechnung_{inv.invoice_number}_ZUGFeRD.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
