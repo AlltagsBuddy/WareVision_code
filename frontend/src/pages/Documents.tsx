@@ -316,6 +316,14 @@ export default function Documents() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => (doc.extracted_text ? setTextModal({ doc }) : handleExtractText(doc))}
+                      disabled={extractingId === doc.id}
+                      className="btn-secondary btn-sm"
+                    >
+                      {extractingId === doc.id ? '…' : doc.extracted_text ? 'Text anzeigen' : 'Text extrahieren'}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => openAssignModal(doc)}
                       className="btn-secondary btn-sm"
                     >
