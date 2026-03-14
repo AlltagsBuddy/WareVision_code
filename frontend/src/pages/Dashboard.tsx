@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { customersApi, stockApi, workshopOrdersApi, appointmentsApi, invoicesApi } from '../api/client'
+import { customersApi, stockApi, workshopOrdersApi, appointmentsApi, invoicesApi, maintenancePlansApi } from '../api/client'
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const [stats, setStats] = useState<{ customers: number; lowStock: number; workshopOrders: number; appointments: number; invoices: number } | null>(null)
+  const [stats, setStats] = useState<{ customers: number; lowStock: number; workshopOrders: number; appointments: number; invoices: number; overdueInvoices: number; maintenancePlans: number } | null>(null)
 
   useEffect(() => {
     const today = new Date()
@@ -21,17 +21,21 @@ export default function Dashboard() {
       workshopOrdersApi.list({ limit: 100 }),
       appointmentsApi.list({ from_date: weekStart.toISOString(), to_date: weekEnd.toISOString() }),
       invoicesApi.list({ limit: 100 }),
+      invoicesApi.list({ overdue: true }),
+      maintenancePlansApi.list(),
     ])
-      .then(([customers, lowStock, orders, apts, invs]) =>
+      .then(([customers, lowStock, orders, apts, invs, overdueInvs, plans]) =>
         setStats({
           customers: customers.length,
           lowStock: lowStock.length,
           workshopOrders: orders.length,
           appointments: apts.filter((a: any) => a.status !== 'cancelled').length,
           invoices: invs.length,
+          overdueInvoices: overdueInvs.length,
+          maintenancePlans: plans.length,
         })
       )
-      .catch(() => setStats({ customers: 0, lowStock: 0, workshopOrders: 0, appointments: 0, invoices: 0 }))
+      .catch(() => setStats({ customers: 0, lowStock: 0, workshopOrders: 0, appointments: 0, invoices: 0, overdueInvoices: 0, maintenancePlans: 0 }))
   }, [])
 
   return (
@@ -54,9 +58,19 @@ export default function Dashboard() {
           <h3>Rechnungen</h3>
           <p>{stats?.invoices ?? '–'}</p>
         </Link>
+        {stats && stats.overdueInvoices > 0 && (
+          <Link to="/invoices?overdue=1" className="card warning">
+            <h3>Überfällig</h3>
+            <p>{stats.overdueInvoices} Rechnung(en)</p>
+          </Link>
+        )}
         <Link to="/stock" className="card warning">
           <h3>Mindestbestand</h3>
           <p>{stats?.lowStock ?? '–'} Artikel unter Mindestbestand</p>
+        </Link>
+        <Link to="/maintenance-plans" className="card">
+          <h3>Wartungspläne</h3>
+          <p>{stats?.maintenancePlans ?? '–'}</p>
         </Link>
       </div>
     </div>

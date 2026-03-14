@@ -34,6 +34,7 @@ class Document(BaseModel):
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

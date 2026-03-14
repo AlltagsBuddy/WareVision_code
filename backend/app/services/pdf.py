@@ -9,8 +9,16 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from app.models.app_setting import AppSetting
 from app.models.invoice import Invoice
 from sqlalchemy.orm import Session
+
+
+def _get_company_settings(db: Session) -> dict[str, str]:
+    """Get company settings for PDF header."""
+    keys = ("company_name", "company_address", "company_vat_id")
+    rows = db.query(AppSetting).filter(AppSetting.key.in_(keys)).all()
+    return {r.key: r.value or "" for r in rows}
 
 
 def _get_customer_name(inv: Invoice) -> str:
@@ -29,7 +37,16 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
     styles = getSampleStyleSheet()
     story = []
 
-    story.append(Paragraph("WareVision – Warenwirtschaft", styles["Title"]))
+    settings_dict = _get_company_settings(db)
+    company_name = settings_dict.get("company_name", "").strip() or "WareVision – Warenwirtschaft"
+    company_address = settings_dict.get("company_address", "").strip()
+    company_vat = settings_dict.get("company_vat_id", "").strip()
+
+    story.append(Paragraph(company_name, styles["Title"]))
+    if company_address:
+        story.append(Paragraph(company_address.replace("\n", "<br/>"), styles["Normal"]))
+    if company_vat:
+        story.append(Paragraph(f"USt-IdNr.: {company_vat}", styles["Normal"]))
     story.append(Paragraph("Rechnung", styles["Heading1"]))
     story.append(Spacer(1, 10 * mm))
 

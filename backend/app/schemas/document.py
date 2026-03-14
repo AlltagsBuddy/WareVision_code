@@ -16,6 +16,7 @@ class DocumentRead(BaseModel):
     filename: str
     content_type: str
     file_size: int
+    extracted_text: Optional[str] = None
     created_at: datetime
 
     class Config:

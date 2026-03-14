@@ -3,7 +3,7 @@ import { authApi } from '../api/client'
 
 export function useAuth() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
-  const [user, setUser] = useState<{ email: string; first_name: string; last_name: string; role_name: string } | null>(null)
+  const [user, setUser] = useState<{ id?: string; email: string; first_name: string; last_name: string; role_name: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

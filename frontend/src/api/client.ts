@@ -36,6 +36,31 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => api<{ id: string; email: string; first_name: string; last_name: string; role_name: string }>('/auth/me'),
+  changePassword: (current_password: string, new_password: string) =>
+    api<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password, new_password }),
+    }),
+}
+
+export const settingsApi = {
+  get: () => api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings'),
+  update: (data: { company_name?: string; company_address?: string; company_vat_id?: string }) =>
+    api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+}
+
+export const usersApi = {
+  list: () => api<any[]>('/users'),
+  roles: () => api<any[]>('/users/roles'),
+  create: (data: { email: string; first_name: string; last_name: string; password: string; role_id: string }) =>
+    api<any>('/users', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { first_name?: string; last_name?: string; is_active?: boolean; password?: string }) =>
+    api<any>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deactivate: (id: string) =>
+    api<void>(`/users/${id}`, { method: 'DELETE' }),
 }
 
 export const customersApi = {
@@ -53,6 +78,13 @@ export const customersApi = {
     api<any>(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) =>
     api<void>(`/customers/${id}`, { method: 'DELETE' }),
+  getAddresses: (customerId: string) => api<any[]>(`/customers/${customerId}/addresses`),
+  addAddress: (customerId: string, data: { address_type: string; street: string; house_number?: string; postal_code: string; city: string; country?: string }) =>
+    api<any>(`/customers/${customerId}/addresses`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteAddress: (customerId: string, addressId: string) =>
+    api<void>(`/customers/${customerId}/addresses/${addressId}`, { method: 'DELETE' }),
+  exportData: (customerId: string) =>
+    api<any>(`/customers/${customerId}/export`),
 }
 
 export const vehiclesApi = {
@@ -107,6 +139,16 @@ export const stockApi = {
   createMovement: (data: Record<string, unknown>) =>
     api<any>('/stock/movements', { method: 'POST', body: JSON.stringify(data) }),
   lowStock: () => api<any[]>('/stock/low-stock'),
+  reservations: (params?: { article_id?: string; status?: string }) => {
+    const p = new URLSearchParams()
+    if (params?.article_id) p.set('article_id', params.article_id)
+    if (params?.status) p.set('status', params.status)
+    return api<any[]>('/stock/reservations?' + p)
+  },
+  createReservation: (data: { article_id: string; quantity: number; reference_type?: string; reference_id?: string; notes?: string }) =>
+    api<any>('/stock/reservations', { method: 'POST', body: JSON.stringify(data) }),
+  updateReservationStatus: (id: string, status: 'consumed' | 'cancelled') =>
+    api<any>(`/stock/reservations/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 }
 
 export const appointmentsApi = {
@@ -175,6 +217,8 @@ export const documentsApi = {
     return res.json()
   },
   get: (id: string) => api<any>(`/documents/${id}`),
+  extractText: (id: string) =>
+    api<any>(`/documents/${id}/extract-text`, { method: 'POST' }),
   update: (id: string, data: { customer_id?: string; vehicle_id?: string }) =>
     api<any>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) =>
@@ -197,10 +241,11 @@ export const documentsApi = {
 }
 
 export const invoicesApi = {
-  list: (params?: { customer_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
+  list: (params?: { customer_id?: string; status_filter?: string; overdue?: boolean; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
     if (params?.customer_id) p.set('customer_id', params.customer_id)
     if (params?.status_filter) p.set('status_filter', params.status_filter)
+    if (params?.overdue) p.set('overdue', 'true')
     if (params?.skip != null) p.set('skip', String(params.skip))
     if (params?.limit != null) p.set('limit', String(params.limit))
     return api<any[]>('/invoices?' + p)
@@ -217,6 +262,8 @@ export const invoicesApi = {
   getItems: (id: string) => api<any[]>(`/invoices/${id}/items`),
   issue: (id: string) =>
     api<any>(`/invoices/${id}/issue`, { method: 'POST' }),
+  markPaid: (id: string) =>
+    api<any>(`/invoices/${id}/mark-paid`, { method: 'POST' }),
   getPdfUrl: (id: string) => `/api/v1/invoices/${id}/pdf`,
   downloadPdf: async (id: string): Promise<Blob> => {
     const token = getToken()
@@ -255,9 +302,10 @@ export const maintenancePlansApi = {
 }
 
 export const workshopOrdersApi = {
-  list: (params?: { customer_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
+  list: (params?: { customer_id?: string; vehicle_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
     if (params?.customer_id) p.set('customer_id', params.customer_id)
+    if (params?.vehicle_id) p.set('vehicle_id', params.vehicle_id)
     if (params?.status_filter) p.set('status_filter', params.status_filter)
     if (params?.skip != null) p.set('skip', String(params.skip))
     if (params?.limit != null) p.set('limit', String(params.limit))

@@ -32,6 +32,7 @@ def init_db() -> None:
         ArticleCategory,
         Article,
         StockMovement,
+        StockReservation,
         Appointment,
         WorkshopOrder,
         WorkshopOrderItem,
@@ -41,6 +42,7 @@ def init_db() -> None:
         InvoiceItem,
         Document,
         AuditLog,
+        AppSetting,
     )
 
 

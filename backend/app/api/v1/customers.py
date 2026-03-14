@@ -6,12 +6,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerAddress
 from app.models.user import User
-from app.schemas.customer import CustomerCreate, CustomerRead, CustomerUpdate
-
+from app.schemas.customer import (
+    CustomerCreate,
+    CustomerRead,
+    CustomerUpdate,
+    CustomerAddressCreate,
+    CustomerAddressRead,
+)
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 
@@ -127,3 +132,110 @@ def delete_customer(
         )
     customer.is_active = False
     db.commit()
+
+
+@router.get("/{customer_id}/addresses", response_model=list[CustomerAddressRead])
+def list_customer_addresses(
+    customer_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> list[CustomerAddress]:
+    """List customer addresses."""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kunde nicht gefunden")
+    return list(customer.addresses)
+
+
+@router.post("/{customer_id}/addresses", response_model=CustomerAddressRead, status_code=status.HTTP_201_CREATED)
+def create_customer_address(
+    customer_id: UUID,
+    payload: CustomerAddressCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> CustomerAddress:
+    """Add address to customer."""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kunde nicht gefunden")
+    addr = CustomerAddress(
+        customer_id=customer_id,
+        address_type=payload.address_type,
+        street=payload.street,
+        house_number=payload.house_number,
+        postal_code=payload.postal_code,
+        city=payload.city,
+        country=payload.country,
+    )
+    db.add(addr)
+    db.commit()
+    db.refresh(addr)
+    return addr
+
+
+@router.delete("/{customer_id}/addresses/{address_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_customer_address(
+    customer_id: UUID,
+    address_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    """Remove address from customer."""
+    addr = (
+        db.query(CustomerAddress)
+        .filter(
+            CustomerAddress.id == address_id,
+            CustomerAddress.customer_id == customer_id,
+        )
+        .first()
+    )
+    if not addr:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Adresse nicht gefunden")
+    db.delete(addr)
+    db.commit()
+
+
+@router.get("/{customer_id}/export")
+def export_customer_data(
+    customer_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> dict:
+    """DSGVO: Export all customer data as JSON (admin only)."""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kunde nicht gefunden")
+
+    from app.models.vehicle import Vehicle
+    from app.models.workshop_order import WorkshopOrder
+    from app.models.invoice import Invoice
+    from app.models.appointment import Appointment
+
+    addresses = [{"address_type": a.address_type, "street": a.street, "house_number": a.house_number, "postal_code": a.postal_code, "city": a.city, "country": a.country} for a in customer.addresses]
+    vehicles = db.query(Vehicle).filter(Vehicle.customer_id == customer_id).all()
+    vehicle_data = [{"license_plate": v.license_plate, "vin": v.vin, "build_year": v.build_year, "mileage": v.mileage} for v in vehicles]
+    orders = db.query(WorkshopOrder).filter(WorkshopOrder.customer_id == customer_id).all()
+    order_data = [{"order_number": o.order_number, "status": o.status, "created_at": str(o.created_at)} for o in orders]
+    invoices = db.query(Invoice).filter(Invoice.customer_id == customer_id).all()
+    invoice_data = [{"invoice_number": i.invoice_number, "status": i.status, "gross_amount": float(i.gross_amount)} for i in invoices]
+    appointments = db.query(Appointment).filter(Appointment.customer_id == customer_id).all()
+    appointment_data = [{"starts_at": str(a.starts_at), "appointment_type": a.appointment_type} for a in appointments]
+
+    return {
+        "exported_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "customer": {
+            "customer_type": customer.customer_type,
+            "company_name": customer.company_name,
+            "first_name": customer.first_name,
+            "last_name": customer.last_name,
+            "email": customer.email,
+            "phone": customer.phone,
+            "vat_id": customer.vat_id,
+            "notes": customer.notes,
+        },
+        "addresses": addresses,
+        "vehicles": vehicle_data,
+        "workshop_orders": order_data,
+        "invoices": invoice_data,
+        "appointments": appointment_data,
+    }

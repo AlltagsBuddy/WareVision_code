@@ -14,6 +14,8 @@ export default function Documents() {
   const [uploadError, setUploadError] = useState('')
   const [assignModal, setAssignModal] = useState<{ doc: any } | null>(null)
   const [assignForm, setAssignForm] = useState({ customer_id: '', vehicle_id: '' })
+  const [textModal, setTextModal] = useState<{ doc: any } | null>(null)
+  const [extractingId, setExtractingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -106,6 +108,19 @@ export default function Documents() {
     }
   }
 
+  const handleExtractText = async (doc: any) => {
+    setExtractingId(doc.id)
+    try {
+      const updated = await documentsApi.extractText(doc.id)
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)))
+      setTextModal({ doc: updated })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Textextraktion fehlgeschlagen')
+    } finally {
+      setExtractingId(null)
+    }
+  }
+
   const openAssignModal = (doc: any) => {
     setAssignModal({ doc })
     setAssignForm({ customer_id: doc.customer_id || '', vehicle_id: doc.vehicle_id || '' })
@@ -177,6 +192,39 @@ export default function Documents() {
         </button>
       </div>
       {uploadError && <p className="error">{uploadError}</p>}
+
+      {textModal && (
+        <div className="modal-overlay" onClick={() => setTextModal(null)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Extrahierter Text: {textModal.doc.filename}</h2>
+            <div
+              style={{
+                maxHeight: 400,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'monospace',
+                fontSize: '0.9rem',
+                padding: '1rem',
+                background: 'var(--color-bg)',
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {textModal.doc.extracted_text || '(Kein Text extrahiert)'}
+            </div>
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setTextModal(null)} className="btn-secondary">
+                Schließen
+              </button>
+              {!textModal.doc.extracted_text && (
+                <button type="button" onClick={() => handleExtractText(textModal.doc)} className="btn-primary">
+                  Text extrahieren
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {assignModal && (
         <div className="modal-overlay" onClick={() => setAssignModal(null)}>

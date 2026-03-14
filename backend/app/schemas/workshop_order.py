@@ -64,6 +64,7 @@ class WorkshopOrderRead(BaseModel):
     id: UUID
     customer_id: UUID
     vehicle_id: UUID
+    appointment_id: Optional[UUID] = None
     order_number: str
     status: str
     complaint_description: Optional[str] = None

@@ -13,6 +13,8 @@ import Appointments from './pages/Appointments'
 import Invoices from './pages/Invoices'
 import Documents from './pages/Documents'
 import MaintenancePlans from './pages/MaintenancePlans'
+import Users from './pages/Users'
+import Settings from './pages/Settings'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="invoices" element={<Invoices />} />
         <Route path="documents" element={<Documents />} />
         <Route path="maintenance-plans" element={<MaintenancePlans />} />
+        <Route path="users" element={<Users />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

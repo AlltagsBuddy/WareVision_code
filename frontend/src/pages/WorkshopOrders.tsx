@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { workshopOrdersApi, customersApi, vehiclesApi, articlesApi } from '../api/client'
+import { Link } from 'react-router-dom'
+import { workshopOrdersApi, customersApi, vehiclesApi, articlesApi, appointmentsApi, documentsApi } from '../api/client'
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'Neu',
@@ -27,6 +28,7 @@ export default function WorkshopOrders() {
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
+    appointment_id: '',
     complaint_description: '',
     internal_notes: '',
     mileage_at_checkin: '',
@@ -36,6 +38,7 @@ export default function WorkshopOrders() {
   const [error, setError] = useState('')
   const [detailOrder, setDetailOrder] = useState<any | null>(null)
   const [items, setItems] = useState<any[]>([])
+  const [orderDocuments, setOrderDocuments] = useState<any[]>([])
   const [articles, setArticles] = useState<any[]>([])
   const [showItemForm, setShowItemForm] = useState(false)
   const [itemForm, setItemForm] = useState({
@@ -64,13 +67,25 @@ export default function WorkshopOrders() {
       .finally(() => setLoading(false))
   }, [statusFilter])
 
+  const [customerAppointments, setCustomerAppointments] = useState<Record<string, any[]>>({})
+
   useEffect(() => {
     if (form.customer_id) {
       vehiclesApi.list({ customer_id: form.customer_id }).then((vehicles) => {
         setCustomerVehicles((prev) => ({ ...prev, [form.customer_id]: vehicles }))
       })
+      const from = new Date()
+      const to = new Date()
+      to.setDate(to.getDate() + 60)
+      appointmentsApi.list({
+        customer_id: form.customer_id,
+        from_date: from.toISOString(),
+        to_date: to.toISOString(),
+      }).then((apts) => {
+        setCustomerAppointments((prev) => ({ ...prev, [form.customer_id]: apts.filter((a: any) => a.status !== 'cancelled') }))
+      }).catch(() => setCustomerAppointments((prev) => ({ ...prev, [form.customer_id]: [] })))
     } else {
-      setForm((f) => ({ ...f, vehicle_id: '' }))
+      setForm((f) => ({ ...f, vehicle_id: '', appointment_id: '' }))
     }
   }, [form.customer_id])
 
@@ -79,6 +94,7 @@ export default function WorkshopOrders() {
     setShowItemForm(false)
     articlesApi.list().then(setArticles)
     workshopOrdersApi.getItems(order.id).then(setItems)
+    documentsApi.list({ vehicle_id: order.vehicle_id }).then(setOrderDocuments)
   }
 
   const closeDetail = () => {
@@ -172,13 +188,14 @@ export default function WorkshopOrders() {
       await workshopOrdersApi.create({
         customer_id: form.customer_id,
         vehicle_id: form.vehicle_id,
+        appointment_id: form.appointment_id || undefined,
         complaint_description: form.complaint_description || undefined,
         internal_notes: form.internal_notes || undefined,
         mileage_at_checkin: form.mileage_at_checkin ? parseInt(form.mileage_at_checkin, 10) : undefined,
         estimated_work_minutes: form.estimated_work_minutes ? parseInt(form.estimated_work_minutes, 10) : undefined,
       })
       setShowForm(false)
-      setForm({ customer_id: '', vehicle_id: '', complaint_description: '', internal_notes: '', mileage_at_checkin: '', estimated_work_minutes: '' })
+      setForm({ customer_id: '', vehicle_id: '', appointment_id: '', complaint_description: '', internal_notes: '', mileage_at_checkin: '', estimated_work_minutes: '' })
       const updated = await workshopOrdersApi.list({ status_filter: statusFilter || undefined })
       setOrders(updated)
     } catch (err) {
@@ -251,6 +268,22 @@ export default function WorkshopOrders() {
                   {vehicles.map((v) => (
                     <option key={v.id} value={v.id}>
                       {v.license_plate || v.vin || 'Fahrzeug'} {v.build_year ? `(${v.build_year})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="appointment">Termin (optional)</label>
+                <select
+                  id="appointment"
+                  value={form.appointment_id}
+                  onChange={(e) => setForm({ ...form, appointment_id: e.target.value })}
+                  disabled={!form.customer_id}
+                >
+                  <option value="">– Kein Termin –</option>
+                  {(customerAppointments[form.customer_id] || []).map((a: any) => (
+                    <option key={a.id} value={a.id}>
+                      {new Date(a.starts_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} – {a.title || a.appointment_type}
                     </option>
                   ))}
                 </select>
@@ -352,6 +385,9 @@ export default function WorkshopOrders() {
             <p>
               <strong>Kunde:</strong> {getCustomerName(detailOrder.customer_id)} &nbsp;
               <strong>Fahrzeug:</strong> {getVehicleLabel(detailOrder.vehicle_id)}
+              {detailOrder.appointment_id && (
+                <> &nbsp; <strong>Termin verknüpft</strong></>
+              )}
             </p>
             <p>{detailOrder.complaint_description || '–'}</p>
             <div className="form-row" style={{ marginBottom: '1rem' }}>
@@ -367,6 +403,25 @@ export default function WorkshopOrders() {
               </select>
             </div>
 
+            {orderDocuments.length > 0 && (
+              <>
+                <h3>Dokumente (Fahrzeug)</h3>
+                <ul style={{ listStyle: 'none', padding: 0, marginBottom: '1rem' }}>
+                  {orderDocuments.map((d) => (
+                    <li key={d.id} style={{ marginBottom: '0.25rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => documentsApi.download(d.id, d.filename)}
+                        className="btn-secondary btn-sm"
+                        style={{ padding: '0.25rem 0.5rem' }}
+                      >
+                        {d.filename}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <h3>Positionen</h3>
             {items.length === 0 ? (
               <p>Keine Positionen.</p>
@@ -513,6 +568,16 @@ export default function WorkshopOrders() {
             )}
 
             <div className="form-actions" style={{ marginTop: '1.5rem' }}>
+              {detailOrder.status !== 'invoiced' && detailOrder.status !== 'cancelled' && items.length > 0 && (
+                <Link
+                  to="/invoices"
+                  state={{ workshopOrderId: detailOrder.id }}
+                  onClick={closeDetail}
+                  className="btn-primary"
+                >
+                  Rechnung erstellen
+                </Link>
+              )}
               <button type="button" onClick={closeDetail} className="btn-secondary">Schließen</button>
             </div>
           </div>

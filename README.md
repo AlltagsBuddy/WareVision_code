@@ -9,41 +9,38 @@
 - **Datenbank:** PostgreSQL
 - **Deployment:** Docker
 
-## Schnellstart
+## Schnellstart mit Docker
+
+```bash
+docker compose up -d --build
+```
+
+- **Frontend:** http://localhost:5173
+- **Backend API:** http://localhost:8000
+- **API-Dokumentation:** http://localhost:8000/docs
+
+**Login:** admin@warevision.local / admin123
+
+## Lokale Entwicklung
 
 ### Voraussetzungen
 
 - Python 3.12+
 - PostgreSQL 16+
-- Node.js 18+ (für Frontend)
+- Node.js 18+
 
-### Backend starten
+### Backend
 
 ```bash
 cd backend
 python -m venv .venv
 .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
-```
-
-Datenbank erstellen und initialisieren:
-
-```bash
-# PostgreSQL: Datenbank "warevision" anlegen
-# Dann:
 python scripts/init_db.py
-```
-
-Backend starten:
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-**API:** http://localhost:8000  
-**Docs:** http://localhost:8000/docs
-
-### Frontend starten
+### Frontend
 
 ```bash
 cd frontend
@@ -51,19 +48,9 @@ npm install
 npm run dev
 ```
 
-**Frontend:** http://localhost:5173
+### Datenbank
 
-### Standard-Login
-
-- **E-Mail:** admin@warevision.local  
-- **Passwort:** admin123
-
-### Docker
-
-```bash
-docker compose up -d postgres
-# Backend und Frontend lokal starten (siehe oben)
-```
+PostgreSQL-Datenbank `warevision` mit User `warevision` / Passwort `warevision` anlegen. Details siehe `docs/ANLEITUNG_SCHRITT5_PROJEKT_TESTEN.md`.
 
 ## Projektstruktur
 
@@ -74,9 +61,10 @@ WareVision_code/
 │   │   ├── api/      # REST Endpoints
 │   │   ├── core/     # Config, DB, Security
 │   │   ├── models/   # SQLAlchemy
-│   │   └── schemas/  # Pydantic
+│   │   ├── schemas/  # Pydantic
+│   │   └── services/ # PDF etc.
 │   ├── alembic/      # Migrationen
-│   └── scripts/      # init_db etc.
+│   └── scripts/      # init_db
 ├── frontend/         # React + TypeScript
 ├── docs/             # Dokumentation
 └── docker-compose.yml
@@ -84,13 +72,18 @@ WareVision_code/
 
 ## Module
 
-- **Kunden** – CRUD, Dublettenprüfung
-- **Fahrzeuge** – Kunde → n Fahrzeuge
-- **Artikel** – Stammdaten, Barcode
-- **Lager** – Wareneingang/-ausgang, Mindestbestand
-- **Werkstattaufträge** – (geplant)
-- **Terminplaner** – (geplant)
-- **Rechnungen** – (geplant)
+| Modul | Funktionen |
+|-------|------------|
+| **Kunden** | CRUD, Dublettenprüfung, Adressen |
+| **Fahrzeuge** | Kunde → n Fahrzeuge, Historie |
+| **Artikel** | Stammdaten, Barcode-Suche |
+| **Lager** | Wareneingang/-ausgang, Mindestbestand, Barcode-Scan |
+| **Werkstattaufträge** | CRUD, Positionen (Arbeit/Teile), Termin-Verknüpfung, Rechnung erstellen |
+| **Wartungspläne** | Pläne nach Hersteller/Modell, Aufgaben |
+| **Terminplaner** | Kalender, Anlegen, Stornieren |
+| **Rechnungen** | Erstellen aus Auftrag/manuell, PDF, Ausstellen, Mahnwesen |
+| **Dokumente** | Upload, Zuordnung Kunde/Fahrzeug |
+| **Benutzer** | Verwaltung (Admin) |
 
 ## Lizenz
 

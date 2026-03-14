@@ -12,6 +12,7 @@ from app.models.base import BaseModel
 
 if TYPE_CHECKING:
     from app.models.stock_movement import StockMovement
+    from app.models.stock_reservation import StockReservation
 
 
 class Article(BaseModel):
@@ -53,3 +54,4 @@ class Article(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     stock_movements = relationship("StockMovement", back_populates="article")
+    stock_reservations = relationship("StockReservation", back_populates="article")

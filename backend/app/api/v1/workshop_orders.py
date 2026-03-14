@@ -46,6 +46,7 @@ def list_workshop_orders(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
     customer_id: UUID | None = None,
+    vehicle_id: UUID | None = None,
     status_filter: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -54,6 +55,8 @@ def list_workshop_orders(
     query = db.query(WorkshopOrder)
     if customer_id:
         query = query.filter(WorkshopOrder.customer_id == customer_id)
+    if vehicle_id:
+        query = query.filter(WorkshopOrder.vehicle_id == vehicle_id)
     if status_filter:
         query = query.filter(WorkshopOrder.status == status_filter)
     return query.order_by(WorkshopOrder.created_at.desc()).offset(skip).limit(limit).all()

@@ -10,12 +10,14 @@ from app.models.supplier import Supplier
 from app.models.article_category import ArticleCategory
 from app.models.article import Article
 from app.models.stock_movement import StockMovement
+from app.models.stock_reservation import StockReservation
 from app.models.appointment import Appointment
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
 from app.models.maintenance_plan import MaintenancePlan, MaintenanceTask
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.document import Document
 from app.models.audit_log import AuditLog
+from app.models.app_setting import AppSetting
 
 __all__ = [
     "BaseModel",
@@ -30,6 +32,7 @@ __all__ = [
     "ArticleCategory",
     "Article",
     "StockMovement",
+    "StockReservation",
     "Appointment",
     "WorkshopOrder",
     "WorkshopOrderItem",
@@ -39,4 +42,5 @@ __all__ = [
     "InvoiceItem",
     "Document",
     "AuditLog",
+    "AppSetting",
 ]

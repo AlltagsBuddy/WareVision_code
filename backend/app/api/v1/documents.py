@@ -3,11 +3,14 @@
 import os
 import uuid
 from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+
+from app.services.ocr import extract_text_from_file
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -108,6 +111,16 @@ async def upload_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    try:
+        extracted = extract_text_from_file(str(file_path), content_type)
+        if extracted:
+            doc.extracted_text = extracted[:50000]
+            db.commit()
+            db.refresh(doc)
+    except Exception:
+        pass
+
     return doc
 
 
@@ -141,6 +154,31 @@ def download_document(
         filename=doc.filename,
         media_type=doc.content_type,
     )
+
+
+@router.post("/{document_id}/extract-text", response_model=DocumentRead)
+def extract_document_text(
+    document_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Document:
+    """Trigger OCR/text extraction for document."""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Datei nicht gefunden")
+    try:
+        extracted = extract_text_from_file(doc.file_path, doc.content_type)
+        doc.extracted_text = (extracted[:50000] if extracted else None)
+        db.commit()
+        db.refresh(doc)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Textextraktion fehlgeschlagen: {str(e)}",
+        )
+    return doc
 
 
 @router.patch("/{document_id}", response_model=DocumentRead)

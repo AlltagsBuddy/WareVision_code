@@ -4,6 +4,8 @@ import { articlesApi } from '../api/client'
 export default function Articles() {
   const [articles, setArticles] = useState<any[]>([])
   const [search, setSearch] = useState('')
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [barcodeFilter, setBarcodeFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
@@ -22,8 +24,12 @@ export default function Articles() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    articlesApi.list({ search: search || undefined }).then(setArticles).finally(() => setLoading(false))
-  }, [search])
+    setLoading(true)
+    articlesApi
+      .list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined })
+      .then(setArticles)
+      .finally(() => setLoading(false))
+  }, [search, barcodeFilter])
 
   const resetForm = () => {
     setForm({
@@ -118,7 +124,24 @@ export default function Articles() {
           type="search"
           placeholder="Artikelnummer oder Name..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setBarcodeFilter('') }}
+        />
+        <input
+          type="text"
+          placeholder="Barcode (Enter)"
+          value={barcodeInput}
+          onChange={(e) => setBarcodeInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              const val = barcodeInput.trim()
+              if (val) {
+                setBarcodeFilter(val)
+                setSearch('')
+              }
+            }
+          }}
+          style={{ maxWidth: 160 }}
         />
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">+ Neuer Artikel</button>
       </div>

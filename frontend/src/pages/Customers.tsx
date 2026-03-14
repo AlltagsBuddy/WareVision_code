@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { customersApi } from '../api/client'
+import { customersApi, vehiclesApi } from '../api/client'
+import { useAuth } from '../hooks/useAuth'
 
 export default function Customers() {
+  const { user } = useAuth()
   const [customers, setCustomers] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -20,6 +22,18 @@ export default function Customers() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
+  const [detailCustomer, setDetailCustomer] = useState<any | null>(null)
+  const [addresses, setAddresses] = useState<any[]>([])
+  const [detailVehicles, setDetailVehicles] = useState<any[]>([])
+  const [showAddressForm, setShowAddressForm] = useState(false)
+  const [addressForm, setAddressForm] = useState({
+    address_type: 'main' as string,
+    street: '',
+    house_number: '',
+    postal_code: '',
+    city: '',
+    country: 'Deutschland',
+  })
 
   useEffect(() => {
     customersApi.list({ search: search || undefined }).then(setCustomers).finally(() => setLoading(false))
@@ -89,6 +103,66 @@ export default function Customers() {
     }
   }
 
+  const handleExport = async (c: any) => {
+    try {
+      const data = await customersApi.exportData(c.id)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Kunde_${c.id}_Export.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export fehlgeschlagen')
+    }
+  }
+
+  const openDetail = async (c: any) => {
+    setDetailCustomer(c)
+    setShowAddressForm(false)
+    Promise.all([
+      customersApi.getAddresses(c.id),
+      vehiclesApi.list({ customer_id: c.id }),
+    ]).then(([addrs, vehs]) => {
+      setAddresses(addrs)
+      setDetailVehicles(vehs)
+    })
+  }
+
+  const closeDetail = () => setDetailCustomer(null)
+
+  const handleAddAddress = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!detailCustomer || !addressForm.street.trim() || !addressForm.postal_code.trim() || !addressForm.city.trim()) return
+    try {
+      await customersApi.addAddress(detailCustomer.id, {
+        address_type: addressForm.address_type,
+        street: addressForm.street.trim(),
+        house_number: addressForm.house_number || undefined,
+        postal_code: addressForm.postal_code.trim(),
+        city: addressForm.city.trim(),
+        country: addressForm.country || 'Deutschland',
+      })
+      const updated = await customersApi.getAddresses(detailCustomer.id)
+      setAddresses(updated)
+      setShowAddressForm(false)
+      setAddressForm({ address_type: 'main', street: '', house_number: '', postal_code: '', city: '', country: 'Deutschland' })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleDeleteAddress = async (addressId: string) => {
+    if (!detailCustomer || !confirm('Adresse wirklich entfernen?')) return
+    try {
+      await customersApi.deleteAddress(detailCustomer.id, addressId)
+      setAddresses((prev) => prev.filter((a) => a.id !== addressId))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
   const openEdit = (c: any) => {
     setEditing(c)
     setForm({
@@ -105,6 +179,8 @@ export default function Customers() {
   }
 
   const getName = (c: any) => c.company_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || '–'
+
+  const ADDRESS_TYPE_LABELS: Record<string, string> = { main: 'Hauptadresse', billing: 'Rechnungsadresse', shipping: 'Lieferadresse' }
 
   return (
     <div className="page">
@@ -234,13 +310,101 @@ export default function Customers() {
                 <td>{c.phone || '–'}</td>
                 <td>{c.customer_type}</td>
                 <td>
+                  <button type="button" onClick={() => openDetail(c)} className="btn-secondary btn-sm">Detail</button>
                   <button type="button" onClick={() => openEdit(c)} className="btn-secondary btn-sm">Bearbeiten</button>
+                  {user?.role_name === 'admin' && (
+                    <button type="button" onClick={() => handleExport(c)} className="btn-secondary btn-sm">Export</button>
+                  )}
                   <button type="button" onClick={() => handleDelete(c)} className="btn-secondary btn-sm">Deaktivieren</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {detailCustomer && (
+        <div className="modal-overlay" onClick={closeDetail}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Kundendetail – {getName(detailCustomer)}</h2>
+            <p>{detailCustomer.email || '–'} | {detailCustomer.phone || '–'}</p>
+            <h3>Fahrzeuge</h3>
+            {detailVehicles.length === 0 ? (
+              <p>Keine Fahrzeuge.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, marginBottom: '1rem' }}>
+                {detailVehicles.map((v) => (
+                  <li key={v.id} style={{ marginBottom: '0.25rem' }}>
+                    {v.license_plate || v.vin || 'Fahrzeug'} {v.build_year ? `(${v.build_year})` : ''} – {v.category === 'quad' ? 'Quad' : 'Motorrad'}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <h3>Adressen</h3>
+            {addresses.length === 0 ? (
+              <p>Keine Adressen hinterlegt.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {addresses.map((a) => (
+                  <li key={a.id} style={{ marginBottom: '0.75rem', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: 6 }}>
+                    <strong>{ADDRESS_TYPE_LABELS[a.address_type] || a.address_type}</strong>
+                    <div>{a.street}{a.house_number ? ` ${a.house_number}` : ''}, {a.postal_code} {a.city}</div>
+                    {a.country && a.country !== 'Deutschland' && <div>{a.country}</div>}
+                    <button type="button" onClick={() => handleDeleteAddress(a.id)} className="btn-secondary btn-sm" style={{ marginTop: 4 }}>Entfernen</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!showAddressForm ? (
+              <button type="button" onClick={() => setShowAddressForm(true)} className="btn-primary" style={{ marginTop: '0.5rem' }}>
+                + Adresse hinzufügen
+              </button>
+            ) : (
+              <form onSubmit={handleAddAddress} style={{ marginTop: '1rem', padding: '1rem', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                <h4>Neue Adresse</h4>
+                <div className="form-group">
+                  <label>Typ</label>
+                  <select value={addressForm.address_type} onChange={(e) => setAddressForm({ ...addressForm, address_type: e.target.value })}>
+                    <option value="main">Hauptadresse</option>
+                    <option value="billing">Rechnungsadresse</option>
+                    <option value="shipping">Lieferadresse</option>
+                  </select>
+                </div>
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Straße *</label>
+                    <input value={addressForm.street} onChange={(e) => setAddressForm({ ...addressForm, street: e.target.value })} required placeholder="Musterstraße" />
+                  </div>
+                  <div className="form-group" style={{ maxWidth: 80 }}>
+                    <label>Nr.</label>
+                    <input value={addressForm.house_number} onChange={(e) => setAddressForm({ ...addressForm, house_number: e.target.value })} placeholder="1a" />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>PLZ *</label>
+                    <input value={addressForm.postal_code} onChange={(e) => setAddressForm({ ...addressForm, postal_code: e.target.value })} required placeholder="90402" />
+                  </div>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Ort *</label>
+                    <input value={addressForm.city} onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })} required placeholder="Nürnberg" />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Land</label>
+                  <input value={addressForm.country} onChange={(e) => setAddressForm({ ...addressForm, country: e.target.value })} placeholder="Deutschland" />
+                </div>
+                <div className="form-actions">
+                  <button type="button" onClick={() => setShowAddressForm(false)} className="btn-secondary">Abbrechen</button>
+                  <button type="submit" className="btn-primary">Hinzufügen</button>
+                </div>
+              </form>
+            )}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={closeDetail} className="btn-secondary">Schließen</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

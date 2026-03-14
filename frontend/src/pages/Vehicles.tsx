@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { vehiclesApi, customersApi, manufacturersApi } from '../api/client'
+import { vehiclesApi, customersApi, manufacturersApi, workshopOrdersApi } from '../api/client'
+
+const STATUS_LABELS: Record<string, string> = {
+  new: 'Neu',
+  planned: 'Geplant',
+  in_progress: 'In Arbeit',
+  completed: 'Abgeschlossen',
+  invoiced: 'Abgerechnet',
+  cancelled: 'Storniert',
+}
 
 export default function Vehicles() {
   const [vehicles, setVehicles] = useState<any[]>([])
@@ -24,6 +33,8 @@ export default function Vehicles() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [detailVehicle, setDetailVehicle] = useState<any | null>(null)
+  const [vehicleOrders, setVehicleOrders] = useState<any[]>([])
 
   useEffect(() => {
     Promise.all([
@@ -115,6 +126,11 @@ export default function Vehicles() {
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
+  }
+
+  const openDetail = async (v: any) => {
+    setDetailVehicle(v)
+    workshopOrdersApi.list({ vehicle_id: v.id }).then(setVehicleOrders)
   }
 
   const openEdit = (v: any) => {
@@ -253,6 +269,7 @@ export default function Vehicles() {
                 <td>{v.build_year || '–'}</td>
                 <td>{v.mileage != null ? `${v.mileage} km` : '–'}</td>
                 <td>
+                  <button type="button" onClick={() => openDetail(v)} className="btn-secondary btn-sm">Historie</button>
                   <button type="button" onClick={() => openEdit(v)} className="btn-secondary btn-sm">Bearbeiten</button>
                   <button type="button" onClick={() => handleDelete(v)} className="btn-secondary btn-sm">Löschen</button>
                 </td>
@@ -260,6 +277,47 @@ export default function Vehicles() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {detailVehicle && (
+        <div className="modal-overlay" onClick={() => setDetailVehicle(null)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Fahrzeughistorie</h2>
+            <p>
+              <strong>{detailVehicle.license_plate || detailVehicle.vin || 'Fahrzeug'}</strong>
+              {' '}– {getCustomerName(detailVehicle.customer_id)}
+              {detailVehicle.build_year && ` (${detailVehicle.build_year})`}
+            </p>
+            <h3>Werkstattaufträge</h3>
+            {vehicleOrders.length === 0 ? (
+              <p>Keine Aufträge für dieses Fahrzeug.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Auftragsnummer</th>
+                    <th>Status</th>
+                    <th>Anliegen</th>
+                    <th>Erstellt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vehicleOrders.map((o) => (
+                    <tr key={o.id}>
+                      <td><strong>{o.order_number}</strong></td>
+                      <td>{STATUS_LABELS[o.status] || o.status}</td>
+                      <td>{o.complaint_description ? (o.complaint_description.slice(0, 60) + (o.complaint_description.length > 60 ? '…' : '')) : '–'}</td>
+                      <td>{new Date(o.created_at).toLocaleDateString('de-DE')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setDetailVehicle(null)} className="btn-secondary">Schließen</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

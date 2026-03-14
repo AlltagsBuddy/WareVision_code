@@ -23,17 +23,31 @@ export default function Stock() {
     quantity: 1,
     notes: '',
   })
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [barcodeError, setBarcodeError] = useState('')
+
+  const [reservations, setReservations] = useState<any[]>([])
+  const [showReservationForm, setShowReservationForm] = useState(false)
+  const [reservationForm, setReservationForm] = useState({
+    article_id: '',
+    quantity: 1,
+    notes: '',
+  })
+  const [reservationError, setReservationError] = useState('')
+  const [reservationSubmitting, setReservationSubmitting] = useState(false)
 
   const load = () => {
     setLoading(true)
     Promise.all([
       stockApi.lowStock(),
       stockApi.movements(),
+      stockApi.reservations({ status: 'active' }),
       articlesApi.list(),
     ])
-      .then(([low, mov, arts]) => {
+      .then(([low, mov, res, arts]) => {
         setLowStock(low)
         setMovements(mov)
+        setReservations(res)
         setArticles(arts)
       })
       .finally(() => setLoading(false))
@@ -68,6 +82,63 @@ export default function Stock() {
     }
   }
 
+  const handleBarcodeScan = async () => {
+    const code = barcodeInput.trim()
+    if (!code) return
+    setBarcodeError('')
+    try {
+      const article = await articlesApi.getByBarcode(code)
+      setForm((f) => ({ ...f, article_id: article.id }))
+      setBarcodeInput('')
+    } catch {
+      setBarcodeError('Artikel mit diesem Barcode nicht gefunden')
+    }
+  }
+
+  const handleReservationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setReservationError('')
+    if (!reservationForm.article_id || reservationForm.quantity < 1) {
+      setReservationError('Bitte Artikel und Menge angeben.')
+      return
+    }
+    setReservationSubmitting(true)
+    try {
+      await stockApi.createReservation({
+        article_id: reservationForm.article_id,
+        quantity: reservationForm.quantity,
+        notes: reservationForm.notes || undefined,
+      })
+      setShowReservationForm(false)
+      setReservationForm({ article_id: '', quantity: 1, notes: '' })
+      load()
+    } catch (err) {
+      setReservationError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setReservationSubmitting(false)
+    }
+  }
+
+  const handleReservationCancel = async (id: string) => {
+    if (!confirm('Reservierung wirklich stornieren?')) return
+    try {
+      await stockApi.updateReservationStatus(id, 'cancelled')
+      load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleReservationConsume = async (id: string) => {
+    if (!confirm('Reservierung als verbraucht markieren? (Erzeugt keine Lagerbewegung – bitte separat erfassen.)')) return
+    try {
+      await stockApi.updateReservationStatus(id, 'consumed')
+      load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
   const getArticleName = (id: string) => {
     const a = articles.find((x) => x.id === id)
     return a ? `${a.article_number} – ${a.name}` : id
@@ -94,6 +165,9 @@ export default function Stock() {
         <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
           + Wareneingang / Warenausgang
         </button>
+        <button type="button" onClick={() => setShowReservationForm(true)} className="btn-secondary">
+          + Reservierung
+        </button>
       </div>
 
       {showForm && (
@@ -101,6 +175,21 @@ export default function Stock() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Lagerbewegung erfassen</h2>
             <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>Barcode scannen</label>
+                <div className="form-row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
+                  <input
+                    type="text"
+                    value={barcodeInput}
+                    onChange={(e) => { setBarcodeInput(e.target.value); setBarcodeError('') }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleBarcodeScan())}
+                    placeholder="Barcode eingeben oder scannen (Enter)"
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" onClick={handleBarcodeScan} className="btn-secondary">Suchen</button>
+                </div>
+                {barcodeError && <p className="error" style={{ marginTop: '0.25rem' }}>{barcodeError}</p>}
+              </div>
               <div className="form-group">
                 <label>Artikel *</label>
                 <select
@@ -161,6 +250,58 @@ export default function Stock() {
         </div>
       )}
 
+      {showReservationForm && (
+        <div className="modal-overlay" onClick={() => setShowReservationForm(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Bestand reservieren</h2>
+            <form onSubmit={handleReservationSubmit}>
+              <div className="form-group">
+                <label>Artikel *</label>
+                <select
+                  value={reservationForm.article_id}
+                  onChange={(e) => setReservationForm({ ...reservationForm, article_id: e.target.value })}
+                  required
+                >
+                  <option value="">– Bitte wählen –</option>
+                  {articles.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.article_number} – {a.name} (Bestand: {a.stock_quantity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Menge *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={reservationForm.quantity}
+                  onChange={(e) => setReservationForm({ ...reservationForm, quantity: parseInt(e.target.value, 10) || 1 })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Notiz</label>
+                <input
+                  value={reservationForm.notes}
+                  onChange={(e) => setReservationForm({ ...reservationForm, notes: e.target.value })}
+                  placeholder="z.B. Auftrag #123"
+                />
+              </div>
+              {reservationError && <p className="error">{reservationError}</p>}
+              <div className="form-actions">
+                <button type="button" onClick={() => setShowReservationForm(false)} className="btn-secondary">
+                  Abbrechen
+                </button>
+                <button type="submit" disabled={reservationSubmitting} className="btn-primary">
+                  {reservationSubmitting ? 'Wird reserviert...' : 'Reservieren'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <h2>Mindestbestand (Warnung)</h2>
       {loading ? (
         <p>Laden...</p>
@@ -173,6 +314,8 @@ export default function Stock() {
               <th>Artikelnummer</th>
               <th>Name</th>
               <th>Bestand</th>
+              <th>Reserviert</th>
+              <th>Verfügbar</th>
               <th>Mindestbestand</th>
             </tr>
           </thead>
@@ -181,8 +324,54 @@ export default function Stock() {
               <tr key={a.id} className="warning-row">
                 <td>{a.article_number}</td>
                 <td>{a.name}</td>
-                <td className="warning">{a.stock_quantity}</td>
+                <td>{a.stock_quantity}</td>
+                <td>{a.reserved_quantity ?? 0}</td>
+                <td>{a.available_quantity ?? a.stock_quantity}</td>
                 <td>{a.minimum_stock}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h2>Aktive Reservierungen</h2>
+      {loading ? (
+        <p>Laden...</p>
+      ) : reservations.length === 0 ? (
+        <p>Keine aktiven Reservierungen.</p>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Artikel</th>
+              <th>Menge</th>
+              <th>Notiz</th>
+              <th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reservations.map((r) => (
+              <tr key={r.id}>
+                <td>{getArticleName(r.article_id)}</td>
+                <td>{r.quantity}</td>
+                <td>{r.notes || '–'}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn-sm btn-secondary"
+                    onClick={() => handleReservationConsume(r.id)}
+                  >
+                    Verbraucht
+                  </button>
+                  {' '}
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    onClick={() => handleReservationCancel(r.id)}
+                  >
+                    Stornieren
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

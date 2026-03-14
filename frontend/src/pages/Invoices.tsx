@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import { invoicesApi, customersApi, workshopOrdersApi } from '../api/client'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -10,12 +11,16 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export default function Invoices() {
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const workshopOrderIdFromState = (location.state as { workshopOrderId?: string })?.workshopOrderId
   const [invoices, setInvoices] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [overdueFilter, setOverdueFilter] = useState(searchParams.get('overdue') === '1')
   const [form, setForm] = useState({
     customer_id: '',
     workshop_order_id: '',
@@ -39,7 +44,7 @@ export default function Invoices() {
         setOrders(ords.filter((o: any) => o.status !== 'invoiced'))
       })
       .finally(() => setLoading(false))
-  }, [statusFilter])
+  }, [statusFilter, overdueFilter])
 
   useEffect(() => {
     if (form.workshop_order_id) {
@@ -47,6 +52,16 @@ export default function Invoices() {
       if (ord) setForm((f) => ({ ...f, customer_id: ord.customer_id }))
     }
   }, [form.workshop_order_id, orders])
+
+  useEffect(() => {
+    if (!workshopOrderIdFromState || orders.length === 0) return
+    const ord = orders.find((o: any) => o.id === workshopOrderIdFromState)
+    if (ord) {
+      setForm((f) => ({ ...f, workshop_order_id: ord.id, customer_id: ord.customer_id }))
+      setShowForm(true)
+    }
+    window.history.replaceState({}, '', location.pathname)
+  }, [workshopOrderIdFromState, orders, location.pathname])
 
   const getCustomerName = (customerId: string) => {
     const c = customers.find((x) => x.id === customerId)
@@ -79,7 +94,7 @@ export default function Invoices() {
         })
         setShowForm(false)
         setForm({ customer_id: '', workshop_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '', items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] })
-        const updated = await invoicesApi.list({ status_filter: statusFilter || undefined })
+        const updated = await invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter })
         setInvoices(updated)
         const ords = await workshopOrdersApi.list()
         setOrders(ords.filter((o: any) => o.status !== 'invoiced'))
@@ -111,7 +126,7 @@ export default function Invoices() {
         })
         setShowForm(false)
         setForm({ customer_id: '', workshop_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '', items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] })
-        const updated = await invoicesApi.list({ status_filter: statusFilter || undefined })
+        const updated = await invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter })
         setInvoices(updated)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Fehler beim Anlegen')
@@ -125,6 +140,15 @@ export default function Invoices() {
     try {
       await invoicesApi.issue(id)
       setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'issued' } : i)))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleMarkPaid = async (id: string) => {
+    try {
+      await invoicesApi.markPaid(id)
+      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'paid' } : i)))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
@@ -167,6 +191,11 @@ export default function Invoices() {
     }
   }
 
+  const isOverdue = (inv: any) => {
+    if (!inv.due_date || inv.status === 'paid' || inv.status === 'cancelled') return false
+    return new Date(inv.due_date) < new Date(new Date().toISOString().slice(0, 10))
+  }
+
   return (
     <div className="page">
       <h1>Rechnungen</h1>
@@ -177,6 +206,10 @@ export default function Invoices() {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input type="checkbox" checked={overdueFilter} onChange={(e) => setOverdueFilter(e.target.checked)} />
+          Überfällig
+        </label>
         <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
           + Neue Rechnung
         </button>
@@ -325,6 +358,7 @@ export default function Invoices() {
               <th>Status</th>
               <th>Kunde</th>
               <th>Datum</th>
+              <th>Fällig</th>
               <th>Brutto</th>
               <th>Aktionen</th>
             </tr>
@@ -332,15 +366,19 @@ export default function Invoices() {
           <tbody>
             {invoices.length === 0 ? (
               <tr>
-                <td colSpan={6}>Keine Rechnungen vorhanden.</td>
+                <td colSpan={7}>Keine Rechnungen vorhanden.</td>
               </tr>
             ) : (
               invoices.map((inv) => (
-                <tr key={inv.id}>
+                <tr key={inv.id} className={isOverdue(inv) ? 'warning-row' : ''}>
                   <td><strong>{inv.invoice_number}</strong></td>
-                  <td>{STATUS_LABELS[inv.status] || inv.status}</td>
+                  <td>
+                    {STATUS_LABELS[inv.status] || inv.status}
+                    {isOverdue(inv) && <span className="warning" style={{ marginLeft: 4 }}>überfällig</span>}
+                  </td>
                   <td>{getCustomerName(inv.customer_id)}</td>
                   <td>{formatDate(inv.invoice_date)}</td>
+                  <td>{inv.due_date ? formatDate(inv.due_date) : '–'}</td>
                   <td>{Number(inv.gross_amount).toFixed(2)} €</td>
                   <td>
                     {inv.status === 'draft' && (
@@ -352,7 +390,25 @@ export default function Invoices() {
                         Ausstellen
                       </button>
                     )}
-                    {(inv.status === 'issued' || inv.status === 'paid' || inv.status === 'partially_paid') && (
+                    {(inv.status === 'issued' || inv.status === 'partially_paid') && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleMarkPaid(inv.id)}
+                          className="btn-secondary btn-sm"
+                        >
+                          Als bezahlt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          PDF
+                        </button>
+                      </>
+                    )}
+                    {(inv.status === 'paid') && (
                       <button
                         type="button"
                         onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}

@@ -68,15 +68,23 @@ def list_invoices(
     current_user: Annotated[User, Depends(get_current_user)],
     customer_id: UUID | None = None,
     status_filter: str | None = None,
+    overdue: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> list[Invoice]:
-    """List invoices."""
+    """List invoices. overdue=True: nur überfällige (issued/partially_paid, due_date < today)."""
     query = db.query(Invoice)
     if customer_id:
         query = query.filter(Invoice.customer_id == customer_id)
     if status_filter:
         query = query.filter(Invoice.status == status_filter)
+    if overdue:
+        today = date.today()
+        query = query.filter(
+            Invoice.status.in_(["issued", "partially_paid"]),
+            Invoice.due_date.isnot(None),
+            Invoice.due_date < today,
+        )
     return query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit).all()
 
 
@@ -196,6 +204,27 @@ def get_invoice_items(
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
     return inv.items
+
+
+@router.post("/{invoice_id}/mark-paid", response_model=InvoiceRead)
+def mark_invoice_paid(
+    invoice_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Invoice:
+    """Set invoice status to paid."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    if inv.status not in ("issued", "partially_paid"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur ausgestellte Rechnungen können als bezahlt markiert werden",
+        )
+    inv.status = "paid"
+    db.commit()
+    db.refresh(inv)
+    return inv
 
 
 @router.post("/{invoice_id}/issue", response_model=InvoiceRead)

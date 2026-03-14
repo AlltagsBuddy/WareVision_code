@@ -35,3 +35,35 @@ class StockMovementRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class StockReservationCreate(BaseModel):
+    """Create stock reservation."""
+
+    article_id: UUID
+    quantity: int = Field(..., gt=0)
+    reference_type: Optional[str] = None
+    reference_id: Optional[UUID] = None
+    notes: Optional[str] = None
+
+
+class StockReservationRead(BaseModel):
+    """Stock reservation read."""
+
+    id: UUID
+    article_id: UUID
+    quantity: int
+    reference_type: Optional[str] = None
+    reference_id: Optional[UUID] = None
+    status: str
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StockReservationStatusUpdate(BaseModel):
+    """Update reservation status."""
+
+    status: str  # consumed, cancelled

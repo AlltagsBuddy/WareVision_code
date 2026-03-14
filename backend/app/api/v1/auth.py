@@ -10,7 +10,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User
-from app.schemas.auth import LoginRequest, Token, UserResponse
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, Token, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -52,3 +52,25 @@ def get_current_user_info(
         role_name=current_user.role.name,
         is_active=current_user.is_active,
     )
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    """Change own password."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aktuelles Passwort ist falsch",
+        )
+    if len(payload.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Neues Passwort muss mindestens 6 Zeichen haben",
+        )
+    current_user.password_hash = get_password_hash(payload.new_password)
+    db.commit()
+    return {"message": "Passwort geändert"}

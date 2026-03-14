@@ -31,6 +31,13 @@ class LoginRequest(BaseModel):
         return v.strip().lower()
 
 
+class ChangePasswordRequest(BaseModel):
+    """Change own password."""
+
+    current_password: str
+    new_password: str
+
+
 class UserResponse(BaseModel):
     """Current user response."""
 
