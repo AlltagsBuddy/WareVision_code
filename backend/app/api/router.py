@@ -16,6 +16,7 @@ from app.api.v1 import (
     documents,
     maintenance,
     settings,
+    audit,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -33,3 +34,4 @@ api_router.include_router(invoices.router)
 api_router.include_router(documents.router)
 api_router.include_router(maintenance.router)
 api_router.include_router(settings.router)
+api_router.include_router(audit.router)

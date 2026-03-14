@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { stockApi, articlesApi } from '../api/client'
+import BarcodeScanner from '../components/BarcodeScanner'
 
 const MOVEMENT_LABELS: Record<string, string> = {
   incoming: 'Wareneingang',
@@ -25,6 +26,7 @@ export default function Stock() {
   })
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeError, setBarcodeError] = useState('')
+  const [scanModalOpen, setScanModalOpen] = useState(false)
 
   const [reservations, setReservations] = useState<any[]>([])
   const [showReservationForm, setShowReservationForm] = useState(false)
@@ -94,6 +96,16 @@ export default function Stock() {
       setBarcodeError('Artikel mit diesem Barcode nicht gefunden')
     }
   }
+
+  const handleScanResult = useCallback(async (code: string) => {
+    setBarcodeError('')
+    try {
+      const article = await articlesApi.getByBarcode(code.trim())
+      setForm((f) => ({ ...f, article_id: article.id }))
+    } catch {
+      setBarcodeError('Artikel mit diesem Barcode nicht gefunden')
+    }
+  }, [])
 
   const handleReservationSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -186,6 +198,9 @@ export default function Stock() {
                     placeholder="Barcode eingeben oder scannen (Enter)"
                     style={{ flex: 1 }}
                   />
+                  <button type="button" onClick={() => setScanModalOpen(true)} className="btn-secondary">
+                    Kamera scannen
+                  </button>
                   <button type="button" onClick={handleBarcodeScan} className="btn-secondary">Suchen</button>
                 </div>
                 {barcodeError && <p className="error" style={{ marginTop: '0.25rem' }}>{barcodeError}</p>}
@@ -249,6 +264,12 @@ export default function Stock() {
           </div>
         </div>
       )}
+
+      <BarcodeScanner
+        open={scanModalOpen}
+        onScan={handleScanResult}
+        onClose={() => setScanModalOpen(false)}
+      />
 
       {showReservationForm && (
         <div className="modal-overlay" onClick={() => setShowReservationForm(false)}>

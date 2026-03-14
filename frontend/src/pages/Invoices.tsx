@@ -34,7 +34,7 @@ export default function Invoices() {
 
   useEffect(() => {
     Promise.all([
-      invoicesApi.list({ status_filter: statusFilter || undefined }),
+      invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter }),
       customersApi.list(),
       workshopOrdersApi.list(),
     ])
@@ -149,6 +149,15 @@ export default function Invoices() {
     try {
       await invoicesApi.markPaid(id)
       setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'paid' } : i)))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleMarkReminder = async (id: string, level: 1 | 2 | 3) => {
+    try {
+      const updated = await invoicesApi.markReminder(id, level)
+      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, reminder_level: updated.reminder_level, reminder_date: updated.reminder_date } : i)))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
@@ -370,6 +379,7 @@ export default function Invoices() {
             <tr>
               <th>Rechnungsnr.</th>
               <th>Status</th>
+              <th>Mahnung</th>
               <th>Kunde</th>
               <th>Datum</th>
               <th>Fällig</th>
@@ -380,7 +390,7 @@ export default function Invoices() {
           <tbody>
             {invoices.length === 0 ? (
               <tr>
-                <td colSpan={7}>Keine Rechnungen vorhanden.</td>
+                <td colSpan={8}>Keine Rechnungen vorhanden.</td>
               </tr>
             ) : (
               invoices.map((inv) => (
@@ -389,6 +399,29 @@ export default function Invoices() {
                   <td>
                     {STATUS_LABELS[inv.status] || inv.status}
                     {isOverdue(inv) && <span className="warning" style={{ marginLeft: 4 }}>überfällig</span>}
+                  </td>
+                  <td>
+                    {inv.reminder_level > 0 ? (
+                      <span title={inv.reminder_date ? `am ${formatDate(inv.reminder_date)}` : ''}>
+                        {inv.reminder_level}. Mahnung
+                      </span>
+                    ) : (
+                      isOverdue(inv) && (inv.status === 'issued' || inv.status === 'partially_paid') ? (
+                        <button type="button" onClick={() => handleMarkReminder(inv.id, 1)} className="btn-secondary btn-sm">
+                          1. Mahnung
+                        </button>
+                      ) : '–'
+                    )}
+                    {inv.reminder_level === 1 && isOverdue(inv) && (
+                      <button type="button" onClick={() => handleMarkReminder(inv.id, 2)} className="btn-secondary btn-sm" style={{ marginLeft: 4 }}>
+                        2. Mahnung
+                      </button>
+                    )}
+                    {inv.reminder_level === 2 && isOverdue(inv) && (
+                      <button type="button" onClick={() => handleMarkReminder(inv.id, 3)} className="btn-secondary btn-sm" style={{ marginLeft: 4 }}>
+                        3. Mahnung
+                      </button>
+                    )}
                   </td>
                   <td>{getCustomerName(inv.customer_id)}</td>
                   <td>{formatDate(inv.invoice_date)}</td>

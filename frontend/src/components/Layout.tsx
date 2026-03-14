@@ -26,6 +26,7 @@ export default function Layout() {
       ? [
           { path: '/users', label: 'Benutzer' },
           { path: '/settings', label: 'Einstellungen' },
+          { path: '/audit-logs', label: 'Audit-Log' },
         ]
       : []),
   ]

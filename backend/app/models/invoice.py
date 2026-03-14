@@ -46,6 +46,8 @@ class Invoice(BaseModel):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     zugferd_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminder_level: Mapped[int] = mapped_column(default=0, nullable=False)  # 0=none, 1=1.Mahnung, 2=2., 3=3.
+    reminder_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),

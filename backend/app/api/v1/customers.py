@@ -10,6 +10,7 @@ from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
 from app.models.customer import Customer, CustomerAddress
 from app.models.user import User
+from app.services.audit import log_audit
 from app.schemas.customer import (
     CustomerCreate,
     CustomerRead,
@@ -74,6 +75,8 @@ def create_customer(
         notes=payload.notes,
     )
     db.add(customer)
+    db.flush()
+    log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer.id, action="create", new_values={"email": customer.email, "company_name": customer.company_name})
     db.commit()
     db.refresh(customer)
     return customer
@@ -110,8 +113,10 @@ def update_customer(
             detail="Kunde nicht gefunden",
         )
     data = payload.model_dump(exclude_unset=True)
+    old_vals = {k: str(getattr(customer, k)) for k in data.keys() if hasattr(customer, k)}
     for key, value in data.items():
         setattr(customer, key, value)
+    log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="update", old_values=old_vals, new_values=data)
     db.commit()
     db.refresh(customer)
     return customer
@@ -131,6 +136,7 @@ def delete_customer(
             detail="Kunde nicht gefunden",
         )
     customer.is_active = False
+    log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="delete", old_values={"email": customer.email, "company_name": customer.company_name})
     db.commit()
 
 

@@ -15,6 +15,7 @@ import Documents from './pages/Documents'
 import MaintenancePlans from './pages/MaintenancePlans'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
+import AuditLogs from './pages/AuditLogs'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="maintenance-plans" element={<MaintenancePlans />} />
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="audit-logs" element={<AuditLogs />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

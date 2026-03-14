@@ -59,6 +59,8 @@ class InvoiceRead(BaseModel):
     vat_amount: Decimal
     gross_amount: Decimal
     notes: Optional[str] = None
+    reminder_level: int = 0
+    reminder_date: Optional[date] = None
     created_at: datetime
 
     class Config:

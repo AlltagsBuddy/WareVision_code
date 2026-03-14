@@ -52,6 +52,18 @@ export const settingsApi = {
     }),
 }
 
+export const auditApi = {
+  list: (params?: { entity_type?: string; entity_id?: string; action?: string; skip?: number; limit?: number }) => {
+    const p = new URLSearchParams()
+    if (params?.entity_type) p.set('entity_type', params.entity_type)
+    if (params?.entity_id) p.set('entity_id', params.entity_id)
+    if (params?.action) p.set('action', params.action)
+    if (params?.skip != null) p.set('skip', String(params.skip))
+    if (params?.limit != null) p.set('limit', String(params.limit))
+    return api<any[]>(`/audit-logs?${p}`)
+  },
+}
+
 export const usersApi = {
   list: () => api<any[]>('/users'),
   roles: () => api<any[]>('/users/roles'),
@@ -285,6 +297,8 @@ export const invoicesApi = {
     api<any>(`/invoices/${id}/issue`, { method: 'POST' }),
   markPaid: (id: string) =>
     api<any>(`/invoices/${id}/mark-paid`, { method: 'POST' }),
+  markReminder: (id: string, level: 1 | 2 | 3) =>
+    api<any>(`/invoices/${id}/reminder?reminder_level=${level}`, { method: 'POST' }),
   getPdfUrl: (id: string) => `/api/v1/invoices/${id}/pdf`,
   downloadPdf: async (id: string): Promise<Blob> => {
     const token = getToken()

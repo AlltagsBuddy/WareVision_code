@@ -15,6 +15,7 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
 from app.models.user import User
 from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceItemRead
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -175,6 +176,14 @@ def create_invoice(
         inv.vat_amount = vat_total
         inv.gross_amount = net + vat_total
 
+    log_audit(
+        db,
+        user_id=current_user.id,
+        entity_type="invoice",
+        entity_id=inv.id,
+        action="create",
+        new_values={"invoice_number": inv.invoice_number, "customer_id": str(inv.customer_id)},
+    )
     db.commit()
     db.refresh(inv)
     return inv
@@ -206,6 +215,30 @@ def get_invoice_items(
     return inv.items
 
 
+@router.post("/{invoice_id}/reminder", response_model=InvoiceRead)
+def mark_invoice_reminder(
+    invoice_id: UUID,
+    reminder_level: int = Query(1, ge=1, le=3, description="1=1.Mahnung, 2=2., 3=3."),
+    db: Annotated[Session, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+) -> Invoice:
+    """Mark reminder sent (1., 2. or 3. Mahnung)."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    if inv.status not in ("issued", "partially_paid"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur ausgestellte Rechnungen können gemahnt werden",
+        )
+    inv.reminder_level = reminder_level
+    inv.reminder_date = date.today()
+    log_audit(db, user_id=current_user.id, entity_type="invoice", entity_id=inv.id, action="reminder", new_values={"reminder_level": reminder_level})
+    db.commit()
+    db.refresh(inv)
+    return inv
+
+
 @router.post("/{invoice_id}/mark-paid", response_model=InvoiceRead)
 def mark_invoice_paid(
     invoice_id: UUID,
@@ -222,6 +255,7 @@ def mark_invoice_paid(
             detail="Nur ausgestellte Rechnungen können als bezahlt markiert werden",
         )
     inv.status = "paid"
+    log_audit(db, user_id=current_user.id, entity_type="invoice", entity_id=inv.id, action="mark_paid")
     db.commit()
     db.refresh(inv)
     return inv
@@ -240,6 +274,7 @@ def issue_invoice(
     if inv.status != "draft":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Entwürfe können ausgestellt werden")
     inv.status = "issued"
+    log_audit(db, user_id=current_user.id, entity_type="invoice", entity_id=inv.id, action="issue")
     db.commit()
     db.refresh(inv)
     return inv

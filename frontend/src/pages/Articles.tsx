@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { articlesApi } from '../api/client'
+import BarcodeScanner from '../components/BarcodeScanner'
 
 export default function Articles() {
   const [articles, setArticles] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeFilter, setBarcodeFilter] = useState('')
+  const [scanModalOpen, setScanModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
@@ -100,6 +102,11 @@ export default function Articles() {
     }
   }
 
+  const handleScanResult = useCallback((code: string) => {
+    setBarcodeFilter(code.trim())
+    setSearch('')
+  }, [])
+
   const openEdit = (a: any) => {
     setEditing(a)
     setForm({
@@ -143,8 +150,16 @@ export default function Articles() {
           }}
           style={{ maxWidth: 160 }}
         />
+        <button type="button" onClick={() => setScanModalOpen(true)} className="btn-secondary">
+          Kamera scannen
+        </button>
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">+ Neuer Artikel</button>
       </div>
+      <BarcodeScanner
+        open={scanModalOpen}
+        onScan={handleScanResult}
+        onClose={() => setScanModalOpen(false)}
+      />
 
       {showForm && (
         <div className="modal-overlay" onClick={() => { setShowForm(false); resetForm() }}>
