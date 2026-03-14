@@ -104,3 +104,91 @@ export const stockApi = {
     api<any>('/stock/movements', { method: 'POST', body: JSON.stringify(data) }),
   lowStock: () => api<any[]>('/stock/low-stock'),
 }
+
+export const appointmentsApi = {
+  list: (params?: {
+    from_date?: string
+    to_date?: string
+    customer_id?: string
+    status_filter?: string
+    skip?: number
+    limit?: number
+  }) => {
+    const p = new URLSearchParams()
+    if (params?.from_date) p.set('from_date', params.from_date)
+    if (params?.to_date) p.set('to_date', params.to_date)
+    if (params?.customer_id) p.set('customer_id', params.customer_id)
+    if (params?.status_filter) p.set('status_filter', params.status_filter)
+    if (params?.skip != null) p.set('skip', String(params.skip))
+    if (params?.limit != null) p.set('limit', String(params.limit))
+    return api<any[]>('/appointments?' + p)
+  },
+  create: (data: {
+    customer_id?: string
+    vehicle_id?: string
+    appointment_type: string
+    title?: string
+    description?: string
+    starts_at: string
+    ends_at: string
+  }) => api<any>('/appointments', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id: string) => api<any>(`/appointments/${id}`),
+  update: (id: string, data: Record<string, unknown>) =>
+    api<any>(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    api<void>(`/appointments/${id}`, { method: 'DELETE' }),
+}
+
+export const invoicesApi = {
+  list: (params?: { customer_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
+    const p = new URLSearchParams()
+    if (params?.customer_id) p.set('customer_id', params.customer_id)
+    if (params?.status_filter) p.set('status_filter', params.status_filter)
+    if (params?.skip != null) p.set('skip', String(params.skip))
+    if (params?.limit != null) p.set('limit', String(params.limit))
+    return api<any[]>('/invoices?' + p)
+  },
+  create: (data: {
+    customer_id: string
+    workshop_order_id?: string
+    invoice_date: string
+    due_date?: string
+    notes?: string
+    items?: { description: string; quantity: number; unit?: string; unit_price: number; vat_rate?: number }[]
+  }) => api<any>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id: string) => api<any>(`/invoices/${id}`),
+  getItems: (id: string) => api<any[]>(`/invoices/${id}/items`),
+  issue: (id: string) =>
+    api<any>(`/invoices/${id}/issue`, { method: 'POST' }),
+  getPdfUrl: (id: string) => `/api/v1/invoices/${id}/pdf`,
+  downloadPdf: async (id: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/invoices/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('PDF konnte nicht geladen werden')
+    return res.blob()
+  },
+}
+
+export const workshopOrdersApi = {
+  list: (params?: { customer_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
+    const p = new URLSearchParams()
+    if (params?.customer_id) p.set('customer_id', params.customer_id)
+    if (params?.status_filter) p.set('status_filter', params.status_filter)
+    if (params?.skip != null) p.set('skip', String(params.skip))
+    if (params?.limit != null) p.set('limit', String(params.limit))
+    return api<any[]>('/workshop-orders?' + p)
+  },
+  create: (data: {
+    customer_id: string
+    vehicle_id: string
+    appointment_id?: string
+    complaint_description?: string
+    internal_notes?: string
+    mileage_at_checkin?: number
+    operating_hours_at_checkin?: number
+    estimated_work_minutes?: number
+  }) => api<any>('/workshop-orders', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id: string) => api<any>(`/workshop-orders/${id}`),
+}

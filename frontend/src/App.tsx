@@ -8,6 +8,9 @@ import Customers from './pages/Customers'
 import Vehicles from './pages/Vehicles'
 import Articles from './pages/Articles'
 import Stock from './pages/Stock'
+import WorkshopOrders from './pages/WorkshopOrders'
+import Appointments from './pages/Appointments'
+import Invoices from './pages/Invoices'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
@@ -33,6 +36,9 @@ export default function App() {
         <Route path="vehicles" element={<Vehicles />} />
         <Route path="articles" element={<Articles />} />
         <Route path="stock" element={<Stock />} />
+        <Route path="workshop-orders" element={<WorkshopOrders />} />
+        <Route path="appointments" element={<Appointments />} />
+        <Route path="invoices" element={<Invoices />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -10,6 +10,8 @@ from app.api.v1 import (
     manufacturers,
     stock,
     workshop_orders,
+    appointments,
+    invoices,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -21,3 +23,5 @@ api_router.include_router(articles.router)
 api_router.include_router(manufacturers.router)
 api_router.include_router(stock.router)
 api_router.include_router(workshop_orders.router)
+api_router.include_router(appointments.router)
+api_router.include_router(invoices.router)
