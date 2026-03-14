@@ -43,10 +43,9 @@ def init_roles_and_admin(db):
 
 def main():
     """Run init."""
-    from app.models import *  # noqa: F401, F403
+    from app.core.database import Base, init_db
 
-    from app.core.database import Base
-
+    init_db()  # Registriert alle Models bei Base.metadata
     print("Creating tables...")
     Base.metadata.create_all(bind=engine)
 
