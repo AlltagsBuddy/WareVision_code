@@ -24,6 +24,7 @@ export default function Documents() {
   const [extractingId, setExtractingId] = useState<string | null>(null)
   const [cameraModal, setCameraModal] = useState(false)
   const [cameraError, setCameraError] = useState('')
+  const [previewModal, setPreviewModal] = useState<{ doc: any; url: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -270,6 +271,18 @@ export default function Documents() {
           className="btn-primary"
         >
           {uploading ? 'Wird hochgeladen...' : '+ Hochladen'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCameraModal(true)
+            setCameraError('')
+            setTimeout(() => startCamera(), 100)
+          }}
+          disabled={uploading}
+          className="btn-secondary"
+        >
+          Foto aufnehmen
         </button>
       </div>
       {uploadError && <p className="error">{uploadError}</p>}
