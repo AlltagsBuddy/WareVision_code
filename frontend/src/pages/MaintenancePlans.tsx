@@ -259,6 +259,7 @@ export default function MaintenancePlans() {
       ) : plans.length === 0 ? (
         <p>Keine Wartungspläne vorhanden.</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -283,6 +284,7 @@ export default function MaintenancePlans() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {detailPlan && (

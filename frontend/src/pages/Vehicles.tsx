@@ -247,6 +247,7 @@ export default function Vehicles() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -277,6 +278,7 @@ export default function Vehicles() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {detailVehicle && (

@@ -6,6 +6,7 @@ import { authApi } from '../api/client'
 export default function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const [navOpen, setNavOpen] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [pwForm, setPwForm] = useState({ current: '', new: '', confirm: '' })
   const [pwError, setPwError] = useState('')
@@ -34,8 +35,16 @@ export default function Layout() {
   return (
     <div className="layout">
       <header className="header">
-        <Link to="/" className="logo">WareVision</Link>
-        <nav className="nav">
+        <button
+          type="button"
+          className="nav-toggle"
+          onClick={() => setNavOpen((o) => !o)}
+          aria-label="Menü"
+        >
+          {navOpen ? '✕' : '☰'}
+        </button>
+        <Link to="/" className="logo" onClick={() => setNavOpen(false)}>WareVision</Link>
+        <nav className={`nav ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)}>
           {navItems.map(({ path, label }) => (
             <Link
               key={path}

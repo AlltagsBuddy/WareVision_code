@@ -374,6 +374,7 @@ export default function Invoices() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -486,6 +487,7 @@ export default function Invoices() {
             )}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

@@ -191,6 +191,7 @@ export default function Users() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -222,6 +223,7 @@ export default function Users() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

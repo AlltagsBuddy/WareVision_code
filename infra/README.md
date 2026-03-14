@@ -2,6 +2,12 @@
 
 Dieser Ordner enthält Infrastruktur-Konfigurationen für WareVision.
 
+## Backup (Epic 19)
+
+- `backup/backup.sh` – PostgreSQL-Dump-Script
+- `backup/restore.sh` – Restore-Script
+- Siehe `docs/ANLEITUNG_BACKUP.md` für Verwendung
+
 ## Geplante Inhalte
 
 - Docker Compose (Produktion)

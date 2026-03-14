@@ -29,6 +29,10 @@ export async function api<T>(
   return res.json()
 }
 
+export const dashboardApi = {
+  getStats: () => api<Record<string, number>>('/dashboard/stats'),
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     api<{ access_token: string }>('/auth/login', {

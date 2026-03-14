@@ -521,6 +521,7 @@ export default function Appointments() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="calendar-wrapper">
         <div className="calendar-grid">
           <div className="calendar-header">
             <div className="calendar-cell calendar-time-header" />
@@ -584,6 +585,7 @@ export default function Appointments() {
               })
             })}
           </div>
+        </div>
         </div>
       )}
     </div>

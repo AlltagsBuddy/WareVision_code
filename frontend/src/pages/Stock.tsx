@@ -329,6 +329,7 @@ export default function Stock() {
       ) : lowStock.length === 0 ? (
         <p>Keine Artikel unter Mindestbestand.</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -353,6 +354,7 @@ export default function Stock() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <h2>Aktive Reservierungen</h2>
@@ -361,6 +363,7 @@ export default function Stock() {
       ) : reservations.length === 0 ? (
         <p>Keine aktiven Reservierungen.</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -397,6 +400,7 @@ export default function Stock() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <h2>Letzte Lagerbewegungen</h2>
@@ -405,6 +409,7 @@ export default function Stock() {
       ) : movements.length === 0 ? (
         <p>Keine Lagerbewegungen vorhanden.</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -427,6 +432,7 @@ export default function Stock() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

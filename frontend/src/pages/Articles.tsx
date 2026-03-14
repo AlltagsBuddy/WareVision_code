@@ -221,6 +221,7 @@ export default function Articles() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -250,6 +251,7 @@ export default function Articles() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

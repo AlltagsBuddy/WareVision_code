@@ -36,6 +36,27 @@ services:
     depends_on:
       - backend
 
+  # Backup: docker compose run backup (manuell)
+  # Tägliches Backup: siehe docs/ANLEITUNG_BACKUP.md
+  backup:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: warevision
+      PGPASSWORD: warevision
+      PGDATABASE: warevision
+      BACKUP_DIR: /backups
+    volumes:
+      - backup_data:/backups
+      - ./infra/backup/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - backup
+
 volumes:
   postgres_data:
   uploads_data:
+  backup_data:

@@ -425,6 +425,7 @@ export default function Documents() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -494,6 +495,7 @@ export default function Documents() {
             )}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

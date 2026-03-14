@@ -346,6 +346,7 @@ export default function WorkshopOrders() {
       {loading ? (
         <p>Laden...</p>
       ) : (
+        <div className="table-wrapper">
         <table className="table">
           <thead>
             <tr>
@@ -376,6 +377,7 @@ export default function WorkshopOrders() {
             )}
           </tbody>
         </table>
+        </div>
       )}
 
       {detailOrder && (

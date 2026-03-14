@@ -13,12 +13,18 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
   background: var(--color-bg);
   color: var(--color-text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
