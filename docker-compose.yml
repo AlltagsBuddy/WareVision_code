@@ -23,6 +23,8 @@ services:
       DATABASE_URL: postgresql://warevision:warevision@postgres:5432/warevision
       SECRET_KEY: dev-secret-key-change-in-production
       UPLOAD_DIR: /app/uploads
+      # Für Tests von anderen Systemen: zusätzliche CORS-Origins (kommagetrennt)
+      # CORS_ORIGINS_EXTRA: "http://192.168.1.100:5173,https://test.warevision.de"
     volumes:
       - uploads_data:/app/uploads
     depends_on:

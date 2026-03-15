@@ -21,6 +21,16 @@ docker compose up -d --build
 
 **Login:** admin@warevision.local / admin123
 
+## Testen von verschiedenen Systemen
+
+WareVision kann einfach von verschiedenen Geräten (PC, Tablet, Smartphone) oder aus anderen Netzwerken getestet werden:
+
+- **Link:** `http://<SERVER-IP>:5173` (z.B. `http://192.168.1.100:5173`)
+- **Zugangsdaten:** admin@warevision.local / admin123
+- **Login mit vorausgefüllter E-Mail:** `http://<SERVER-IP>:5173/login?email=admin@warevision.local`
+
+Details siehe [docs/TEST_ZUGANG.md](docs/TEST_ZUGANG.md).
+
 ## Lokale Entwicklung
 
 ### Voraussetzungen

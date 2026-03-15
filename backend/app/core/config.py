@@ -1,8 +1,8 @@
 """Application configuration."""
 
 from functools import lru_cache
-from typing import Optional
 
+from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,11 +31,19 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
-    # CORS
+    # CORS – Basis-Origins + optionale Zusatz-Origins (kommagetrennt) für externe Tests
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS_EXTRA: str = ""  # z.B. "https://test.warevision.de,http://192.168.1.100:5173"
 
     # Uploads
     UPLOAD_DIR: str = "uploads"
+
+    @computed_field
+    @property
+    def cors_origins_resolved(self) -> list[str]:
+        """CORS-Origins inkl. CORS_ORIGINS_EXTRA (kommagetrennt)."""
+        extra = [o.strip() for o in self.CORS_ORIGINS_EXTRA.split(",") if o.strip()]
+        return [*self.CORS_ORIGINS, *extra]
 
 
 @lru_cache
