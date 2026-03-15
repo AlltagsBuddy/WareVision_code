@@ -2,15 +2,17 @@
 
 import os
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
 from typing import Annotated
 from uuid import UUID
 
 from fastapi.responses import FileResponse
 
 from app.services.ocr import extract_text_from_file
+from app.services.audit import log_audit
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -199,6 +201,70 @@ def update_document(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+@router.post("/{document_id}/send-email")
+def send_document_email(
+    document_id: UUID,
+    payload: dict = Body(default_factory=dict),
+    db: Annotated[Session, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+):
+    """Dokument per E-Mail versenden. recipient_email optional (sonst Kunden-E-Mail)."""
+    from app.services.email import send_email_with_attachment
+
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Datei nicht gefunden")
+
+    recipient = (payload or {}).get("recipient_email", "").strip() if payload else ""
+    if not recipient and doc.customer_id:
+        recipient = (doc.customer.email or "").strip()
+    if not recipient:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keine E-Mail-Adresse. Bitte Empfänger angeben oder Dokument einem Kunden mit E-Mail zuordnen.",
+        )
+
+    with open(doc.file_path, "rb") as f:
+        file_data = f.read()
+
+    subject = f"Dokument: {doc.filename}"
+    body = f"""Sehr geehrte Damen und Herren,
+
+anbei erhalten Sie das angehängte Dokument.
+
+Mit freundlichen Grüßen
+"""
+
+    send_email_with_attachment(
+        db,
+        to_email=recipient,
+        subject=subject,
+        body=body,
+        attachment_filename=doc.filename,
+        attachment_data=file_data,
+        attachment_content_type=doc.content_type,
+    )
+
+    log_audit(
+        db,
+        user_id=current_user.id,
+        entity_type="document",
+        entity_id=doc.id,
+        action="email_sent",
+        new_values={
+            "recipient_email": recipient,
+            "subject": subject,
+            "attachment_filename": doc.filename,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    db.commit()
+
+    return {"message": "Dokument wurde per E-Mail versendet.", "recipient": recipient}
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

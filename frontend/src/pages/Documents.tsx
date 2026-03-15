@@ -4,9 +4,16 @@ import { documentsApi, customersApi, vehiclesApi } from '../api/client'
 const ALLOWED_EXT = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']
 const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 
-const isImageDoc = (filename: string) => {
+const isImageDoc = (filename: string, contentType?: string) => {
+  if (contentType?.startsWith('image/')) return true
   const ext = '.' + (filename.split('.').pop()?.toLowerCase() || '')
   return IMAGE_EXT.includes(ext)
+}
+
+const isPdfDoc = (filename: string, contentType?: string) => {
+  if (contentType === 'application/pdf') return true
+  const ext = '.' + (filename.split('.').pop()?.toLowerCase() || '')
+  return ext === '.pdf'
 }
 
 export default function Documents() {
@@ -155,11 +162,12 @@ export default function Documents() {
   }
 
   const openPreview = async (doc: any) => {
-    if (!isImageDoc(doc.filename)) return
+    if (!isImageDoc(doc.filename, doc.content_type) && !isPdfDoc(doc.filename, doc.content_type)) return
     try {
       const blob = await documentsApi.getBlob(doc.id)
       const url = URL.createObjectURL(blob)
-      setPreviewModal({ doc, url })
+      const type = isPdfDoc(doc.filename, doc.content_type) ? 'pdf' : 'image'
+      setPreviewModal({ doc, url, type })
     } catch {
       setUploadError('Vorschau konnte nicht geladen werden')
     }
@@ -451,7 +459,7 @@ export default function Documents() {
                   <td>{getVehicleLabel(doc.vehicle_id)}</td>
                   <td>{formatDate(doc.created_at)}</td>
                   <td>
-                    {isImageDoc(doc.filename) && (
+                    {(isImageDoc(doc.filename, doc.content_type) || isPdfDoc(doc.filename, doc.content_type)) && (
                       <button
                         type="button"
                         onClick={() => openPreview(doc)}

@@ -31,6 +31,7 @@ export default function Invoices() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [previewModal, setPreviewModal] = useState<{ invoiceNumber: string; url: string } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -188,6 +189,23 @@ export default function Invoices() {
       URL.revokeObjectURL(url)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'ZUGFeRD konnte nicht geladen werden')
+    }
+  }
+
+  const handlePreviewPdf = async (id: string, invoiceNumber: string) => {
+    try {
+      const blob = await invoicesApi.downloadPdf(id)
+      const url = URL.createObjectURL(blob)
+      setPreviewModal({ invoiceNumber, url })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'PDF konnte nicht geladen werden')
+    }
+  }
+
+  const closePreview = () => {
+    if (previewModal) {
+      URL.revokeObjectURL(previewModal.url)
+      setPreviewModal(null)
     }
   }
 
@@ -371,6 +389,38 @@ export default function Invoices() {
         </div>
       )}
 
+      {previewModal && (
+        <div className="modal-overlay" onClick={closePreview}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900 }}>
+            <h2>Rechnungsvorschau: {previewModal.invoiceNumber}</h2>
+            <div style={{ height: '70vh', minHeight: 400, borderRadius: 8, overflow: 'hidden', background: '#1e293b' }}>
+              <iframe
+                src={previewModal.url}
+                title={`Rechnung ${previewModal.invoiceNumber}`}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </div>
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={closePreview} className="btn-secondary">
+                Schließen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const a = document.createElement('a')
+                  a.href = previewModal.url
+                  a.download = `Rechnung_${previewModal.invoiceNumber}.pdf`
+                  a.click()
+                }}
+                className="btn-primary"
+              >
+                PDF herunterladen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p>Laden...</p>
       ) : (
@@ -430,13 +480,22 @@ export default function Invoices() {
                   <td>{Number(inv.gross_amount).toFixed(2)} €</td>
                   <td>
                     {inv.status === 'draft' && (
-                      <button
-                        type="button"
-                        onClick={() => handleIssue(inv.id)}
-                        className="btn-secondary btn-sm"
-                      >
-                        Ausstellen
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewPdf(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          Vorschau
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleIssue(inv.id)}
+                          className="btn-secondary btn-sm"
+                        >
+                          Ausstellen
+                        </button>
+                      </>
                     )}
                     {(inv.status === 'issued' || inv.status === 'partially_paid') && (
                       <>
@@ -446,6 +505,13 @@ export default function Invoices() {
                           className="btn-secondary btn-sm"
                         >
                           Als bezahlt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewPdf(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          Vorschau
                         </button>
                         <button
                           type="button"
@@ -465,6 +531,13 @@ export default function Invoices() {
                     )}
                     {(inv.status === 'paid') && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewPdf(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          Vorschau
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}

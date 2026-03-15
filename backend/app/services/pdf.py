@@ -16,7 +16,18 @@ from sqlalchemy.orm import Session
 
 def _get_company_settings(db: Session) -> dict[str, str]:
     """Get company settings for PDF header."""
-    keys = ("company_name", "company_address", "company_vat_id")
+    keys = (
+        "company_name",
+        "company_address",
+        "company_vat_id",
+        "company_email",
+        "company_phone",
+        "company_website",
+        "company_bank_name",
+        "company_bank_iban",
+        "company_bank_bic",
+        "company_bank_account_holder",
+    )
     rows = db.query(AppSetting).filter(AppSetting.key.in_(keys)).all()
     return {r.key: r.value or "" for r in rows}
 
@@ -41,10 +52,26 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
     company_name = settings_dict.get("company_name", "").strip() or "WareVision – Warenwirtschaft"
     company_address = settings_dict.get("company_address", "").strip()
     company_vat = settings_dict.get("company_vat_id", "").strip()
+    company_email = settings_dict.get("company_email", "").strip()
+    company_phone = settings_dict.get("company_phone", "").strip()
+    company_website = settings_dict.get("company_website", "").strip()
+    company_bank_name = settings_dict.get("company_bank_name", "").strip()
+    company_bank_iban = settings_dict.get("company_bank_iban", "").strip()
+    company_bank_bic = settings_dict.get("company_bank_bic", "").strip()
+    company_bank_holder = settings_dict.get("company_bank_account_holder", "").strip() or company_name
 
     story.append(Paragraph(company_name, styles["Title"]))
     if company_address:
         story.append(Paragraph(company_address.replace("\n", "<br/>"), styles["Normal"]))
+    contact_parts = []
+    if company_email:
+        contact_parts.append(f"E-Mail: {company_email}")
+    if company_phone:
+        contact_parts.append(f"Tel.: {company_phone}")
+    if company_website:
+        contact_parts.append(f"Web: {company_website}")
+    if contact_parts:
+        story.append(Paragraph("<br/>".join(contact_parts), styles["Normal"]))
     if company_vat:
         story.append(Paragraph(f"USt-IdNr.: {company_vat}", styles["Normal"]))
     story.append(Paragraph("Rechnung", styles["Heading1"]))
@@ -90,6 +117,17 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
     story.append(Paragraph(f"<b>Netto:</b> {inv.net_amount:.2f} €", styles["Normal"]))
     story.append(Paragraph(f"<b>MwSt:</b> {inv.vat_amount:.2f} €", styles["Normal"]))
     story.append(Paragraph(f"<b>Brutto:</b> {inv.gross_amount:.2f} €", styles["Normal"]))
+    if company_bank_name or company_bank_iban or company_bank_bic:
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph("<b>Bankverbindung für Überweisung:</b>", styles["Normal"]))
+        if company_bank_holder:
+            story.append(Paragraph(f"Kontoinhaber: {company_bank_holder}", styles["Normal"]))
+        if company_bank_name:
+            story.append(Paragraph(f"Bank: {company_bank_name}", styles["Normal"]))
+        if company_bank_iban:
+            story.append(Paragraph(f"IBAN: {company_bank_iban}", styles["Normal"]))
+        if company_bank_bic:
+            story.append(Paragraph(f"BIC: {company_bank_bic}", styles["Normal"]))
     if inv.notes:
         story.append(Spacer(1, 5 * mm))
         story.append(Paragraph(f"<b>Anmerkungen:</b> {inv.notes}", styles["Normal"]))

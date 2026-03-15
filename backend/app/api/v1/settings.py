@@ -12,7 +12,25 @@ from app.schemas.app_setting import AppSettingsOut, AppSettingsUpdate
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-_SETTING_KEYS = ("company_name", "company_address", "company_vat_id", "termin_marktplatz_api_key")
+_SETTING_KEYS = (
+    "company_name",
+    "company_address",
+    "company_vat_id",
+    "company_email",
+    "company_phone",
+    "company_website",
+    "company_bank_name",
+    "company_bank_iban",
+    "company_bank_bic",
+    "company_bank_account_holder",
+    "smtp_host",
+    "smtp_port",
+    "smtp_user",
+    "smtp_password",
+    "smtp_from",
+    "smtp_tls",
+    "termin_marktplatz_api_key",
+)
 
 
 def _settings_to_dict(db: Session) -> dict[str, str]:
@@ -28,10 +46,24 @@ def get_settings(
 ):
     """Get company settings (admin only)."""
     d = _settings_to_dict(db)
+    smtp_pw = d.get("smtp_password", "")
     return AppSettingsOut(
         company_name=d.get("company_name", ""),
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),
+        company_email=d.get("company_email", ""),
+        company_phone=d.get("company_phone", ""),
+        company_website=d.get("company_website", ""),
+        company_bank_name=d.get("company_bank_name", ""),
+        company_bank_iban=d.get("company_bank_iban", ""),
+        company_bank_bic=d.get("company_bank_bic", ""),
+        company_bank_account_holder=d.get("company_bank_account_holder", ""),
+        smtp_host=d.get("smtp_host", ""),
+        smtp_port=d.get("smtp_port", "587"),
+        smtp_user=d.get("smtp_user", ""),
+        smtp_password="********" if smtp_pw else "",
+        smtp_from=d.get("smtp_from", ""),
+        smtp_tls=d.get("smtp_tls", "true"),
     )
 
 
@@ -50,6 +82,8 @@ def update_settings(
     """Update company settings (admin only)."""
     for key in _SETTING_KEYS:
         val = getattr(payload, key, None)
+        if key == "smtp_password" and (val is None or val == "********"):
+            continue  # Passwort nicht überschreiben wenn leer oder Platzhalter
         if val is not None:
             row = db.query(AppSetting).filter(AppSetting.key == key).first()
             if row:
@@ -58,8 +92,22 @@ def update_settings(
                 db.add(AppSetting(key=key, value=val))
     db.commit()
     d = _settings_to_dict(db)
+    smtp_pw = d.get("smtp_password", "")
     return AppSettingsOut(
         company_name=d.get("company_name", ""),
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),
+        company_email=d.get("company_email", ""),
+        company_phone=d.get("company_phone", ""),
+        company_website=d.get("company_website", ""),
+        company_bank_name=d.get("company_bank_name", ""),
+        company_bank_iban=d.get("company_bank_iban", ""),
+        company_bank_bic=d.get("company_bank_bic", ""),
+        company_bank_account_holder=d.get("company_bank_account_holder", ""),
+        smtp_host=d.get("smtp_host", ""),
+        smtp_port=d.get("smtp_port", "587"),
+        smtp_user=d.get("smtp_user", ""),
+        smtp_password="********" if smtp_pw else "",
+        smtp_from=d.get("smtp_from", ""),
+        smtp_tls=d.get("smtp_tls", "true"),
     )

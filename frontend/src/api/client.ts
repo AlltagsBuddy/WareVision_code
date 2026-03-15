@@ -49,8 +49,31 @@ export const authApi = {
 }
 
 export const settingsApi = {
-  get: () => api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings'),
-  update: (data: { company_name?: string; company_address?: string; company_vat_id?: string; termin_marktplatz_api_key?: string }) =>
+  get: () => api<{
+    company_name: string
+    company_address: string
+    company_vat_id: string
+    company_email: string
+    company_phone: string
+    company_website: string
+    company_bank_name: string
+    company_bank_iban: string
+    company_bank_bic: string
+    company_bank_account_holder: string
+  }>('/settings'),
+  update: (data: {
+    company_name?: string
+    company_address?: string
+    company_vat_id?: string
+    company_email?: string
+    company_phone?: string
+    company_website?: string
+    company_bank_name?: string
+    company_bank_iban?: string
+    company_bank_bic?: string
+    company_bank_account_holder?: string
+    termin_marktplatz_api_key?: string
+  }) =>
     api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
       method: 'PATCH',
       body: JSON.stringify(data),

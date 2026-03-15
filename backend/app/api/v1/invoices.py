@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -294,6 +294,75 @@ def get_invoice_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
     pdf_bytes = generate_invoice_pdf(db, inv)
     return Response(content=pdf_bytes, media_type="application/pdf")
+
+
+@router.post("/{invoice_id}/send-email")
+def send_invoice_email(
+    invoice_id: UUID,
+    payload: dict = Body(default_factory=dict),
+    db: Annotated[Session, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+):
+    """Rechnung per E-Mail versenden. recipient_email optional (sonst Kunden-E-Mail)."""
+    from app.services.pdf import generate_invoice_pdf
+    from app.services.email import send_email_with_attachment
+    from app.models.app_setting import AppSetting
+
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+
+    recipient = (payload or {}).get("recipient_email", "").strip() if payload else ""
+    if not recipient:
+        cust = inv.customer
+        recipient = (cust.email or "").strip()
+    if not recipient:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keine E-Mail-Adresse. Bitte Empfänger angeben oder Kunde hat keine E-Mail.",
+        )
+
+    settings_rows = db.query(AppSetting).filter(AppSetting.key == "company_name").all()
+    company_name = (settings_rows[0].value or "WareVision").strip() if settings_rows else "WareVision"
+
+    pdf_bytes = generate_invoice_pdf(db, inv)
+    filename = f"Rechnung_{inv.invoice_number}.pdf"
+    subject = f"Rechnung {inv.invoice_number} – {company_name}"
+    body = f"""Sehr geehrte Damen und Herren,
+
+anbei erhalten Sie die Rechnung {inv.invoice_number}.
+
+Mit freundlichen Grüßen
+{company_name}
+"""
+
+    send_email_with_attachment(
+        db,
+        to_email=recipient,
+        subject=subject,
+        body=body,
+        attachment_filename=filename,
+        attachment_data=pdf_bytes,
+        attachment_content_type="application/pdf",
+    )
+
+    from datetime import datetime, timezone
+    log_audit(
+        db,
+        user_id=current_user.id,
+        entity_type="invoice",
+        entity_id=inv.id,
+        action="email_sent",
+        new_values={
+            "recipient_email": recipient,
+            "subject": subject,
+            "attachment_filename": filename,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    db.commit()
+
+    return {"message": "Rechnung wurde per E-Mail versendet.", "recipient": recipient}
 
 
 @router.get("/{invoice_id}/zugferd")

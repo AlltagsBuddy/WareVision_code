@@ -59,8 +59,15 @@ export default function BarcodeScanner({ open, onScan, onClose }: BarcodeScanner
     setFileError(null)
     if (!file) return
     try {
-      const scanner = new Html5Qrcode(fileId, { useBarCodeDetectorIfSupported: false, verbose: false })
-      const decodedText = await scanner.scanFile(file, false)
+      // Kamera stoppen, falls sie läuft – scanFile benötigt den freien Container
+      if (scannerRef.current) {
+        await scannerRef.current.stop()
+        scannerRef.current = null
+      }
+      // Sichtbarer Container (id) statt display:none – für zuverlässige Bildverarbeitung
+      // useBarCodeDetectorIfSupported: true für bessere EAN/QR-Erkennung in Bildern
+      const scanner = new Html5Qrcode(id, { useBarCodeDetectorIfSupported: true, verbose: false })
+      const decodedText = await scanner.scanFile(file, true)
       onScan(decodedText)
       onClose()
     } catch (err) {
@@ -76,7 +83,6 @@ export default function BarcodeScanner({ open, onScan, onClose }: BarcodeScanner
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Barcode / QR-Code scannen</h2>
         <div id={id} style={{ minHeight: 200, borderRadius: 8, overflow: 'hidden' }} />
-        <div id={fileId} style={{ display: 'none' }} />
         {cameraError && (
           <p className="error" style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>{cameraError}</p>
         )}

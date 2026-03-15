@@ -87,6 +87,12 @@ export default function Dashboard() {
           <h3>Wartungspläne</h3>
           <p>{stats?.maintenance_plans ?? '–'}</p>
         </Link>
+        {user?.role_name === 'admin' && (
+          <Link to="/users" className="card">
+            <h3>Benutzer</h3>
+            <p>Anlegen &amp; verwalten</p>
+          </Link>
+        )}
       </div>
     </div>
   )
