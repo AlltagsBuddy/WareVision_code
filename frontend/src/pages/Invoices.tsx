@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { invoicesApi, customersApi, workshopOrdersApi } from '../api/client'
+import PreviewModal from '../components/PreviewModal'
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Entwurf',
@@ -440,35 +441,12 @@ export default function Invoices() {
       )}
 
       {previewModal && (
-        <div className="modal-overlay" onClick={closePreview}>
-          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900 }}>
-            <h2>Rechnungsvorschau: {previewModal.invoiceNumber}</h2>
-            <div style={{ height: '70vh', minHeight: 400, borderRadius: 8, overflow: 'hidden', background: '#1e293b' }}>
-              <iframe
-                src={previewModal.url}
-                title={`Rechnung ${previewModal.invoiceNumber}`}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-            <div className="form-actions" style={{ marginTop: '1rem' }}>
-              <button type="button" onClick={closePreview} className="btn-secondary">
-                Schließen
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const a = document.createElement('a')
-                  a.href = previewModal.url
-                  a.download = `Rechnung_${previewModal.invoiceNumber}.pdf`
-                  a.click()
-                }}
-                className="btn-primary"
-              >
-                PDF herunterladen
-              </button>
-            </div>
-          </div>
-        </div>
+        <PreviewModal
+          title={`Rechnung ${previewModal.invoiceNumber}`}
+          url={previewModal.url}
+          type="pdf"
+          onClose={closePreview}
+        />
       )}
 
       {loading ? (

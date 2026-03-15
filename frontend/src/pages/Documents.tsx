@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { documentsApi, customersApi, vehiclesApi } from '../api/client'
+import PreviewModal from '../components/PreviewModal'
 
 const ALLOWED_EXT = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']
 const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
@@ -377,26 +378,12 @@ export default function Documents() {
       )}
 
       {previewModal && (
-        <div className="modal-overlay" onClick={closePreview}>
-          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-            <h2>Bildvorschau: {previewModal.doc.filename}</h2>
-            <div style={{ textAlign: 'center', maxHeight: '70vh', overflow: 'auto' }}>
-              <img
-                src={previewModal.url}
-                alt={previewModal.doc.filename}
-                style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
-              />
-            </div>
-            <div className="form-actions" style={{ marginTop: '1rem' }}>
-              <button type="button" onClick={closePreview} className="btn-secondary">
-                Schließen
-              </button>
-              <button type="button" onClick={() => { handleDownload(previewModal.doc); closePreview() }} className="btn-primary">
-                Download
-              </button>
-            </div>
-          </div>
-        </div>
+        <PreviewModal
+          title={previewModal.doc.filename}
+          url={previewModal.url}
+          type={previewModal.type === 'pdf' ? 'pdf' : 'image'}
+          onClose={closePreview}
+        />
       )}
 
       {sendEmailModal && (
