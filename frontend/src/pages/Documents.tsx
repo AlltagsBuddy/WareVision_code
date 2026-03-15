@@ -31,7 +31,8 @@ export default function Documents() {
   const [extractingId, setExtractingId] = useState<string | null>(null)
   const [cameraModal, setCameraModal] = useState(false)
   const [cameraError, setCameraError] = useState('')
-  const [previewModal, setPreviewModal] = useState<{ doc: any; url: string } | null>(null)
+  const [previewModal, setPreviewModal] = useState<{ doc: any; url: string; type?: 'image' | 'pdf' } | null>(null)
+  const [sendEmailModal, setSendEmailModal] = useState<{ doc: any; recipientEmail: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -216,6 +217,27 @@ export default function Documents() {
     setAssignForm({ customer_id: doc.customer_id || '', vehicle_id: doc.vehicle_id || '' })
   }
 
+  const handleSendEmail = (doc: any) => {
+    const cust = doc.customer_id ? customers.find((c) => c.id === doc.customer_id) : null
+    setSendEmailModal({ doc, recipientEmail: cust?.email || '' })
+  }
+
+  const handleSendEmailSubmit = async () => {
+    if (!sendEmailModal) return
+    const email = sendEmailModal.recipientEmail.trim()
+    if (!email) {
+      setUploadError('Bitte E-Mail-Adresse eingeben.')
+      return
+    }
+    try {
+      await documentsApi.sendEmail(sendEmailModal.doc.id, email)
+      alert(`Dokument wurde an ${email} versendet.`)
+      setSendEmailModal(null)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'E-Mail-Versand fehlgeschlagen')
+    }
+  }
+
   const handleAssign = async () => {
     if (!assignModal) return
     try {
@@ -377,6 +399,30 @@ export default function Documents() {
         </div>
       )}
 
+      {sendEmailModal && (
+        <div className="modal-overlay" onClick={() => setSendEmailModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Dokument per E-Mail versenden</h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+              {sendEmailModal.doc.filename} wird als Anhang versendet. Der Versand wird im Audit-Log dokumentiert.
+            </p>
+            <div className="form-group">
+              <label>Empfänger-E-Mail *</label>
+              <input
+                type="email"
+                value={sendEmailModal.recipientEmail}
+                onChange={(e) => setSendEmailModal({ ...sendEmailModal, recipientEmail: e.target.value })}
+                placeholder="kunde@beispiel.de"
+              />
+            </div>
+            <div className="form-actions">
+              <button type="button" onClick={() => setSendEmailModal(null)} className="btn-secondary">Abbrechen</button>
+              <button type="button" onClick={handleSendEmailSubmit} className="btn-primary">Versenden</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {assignModal && (
         <div className="modal-overlay" onClick={() => setAssignModal(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -468,6 +514,13 @@ export default function Documents() {
                         Vorschau
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleSendEmail(doc)}
+                      className="btn-secondary btn-sm"
+                    >
+                      E-Mail
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleDownload(doc)}

@@ -16,6 +16,12 @@ export default function Settings() {
     company_bank_iban: '',
     company_bank_bic: '',
     company_bank_account_holder: '',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_password: '',
+    smtp_from: '',
+    smtp_tls: 'true',
     termin_marktplatz_api_key: '',
   })
   const [loading, setLoading] = useState(true)
@@ -38,6 +44,12 @@ export default function Settings() {
           company_bank_iban: data.company_bank_iban || '',
           company_bank_bic: data.company_bank_bic || '',
           company_bank_account_holder: data.company_bank_account_holder || '',
+          smtp_host: data.smtp_host || '',
+          smtp_port: data.smtp_port || '587',
+          smtp_user: data.smtp_user || '',
+          smtp_password: data.smtp_password || '',
+          smtp_from: data.smtp_from || '',
+          smtp_tls: data.smtp_tls || 'true',
           termin_marktplatz_api_key: '',
         })
       )
@@ -62,6 +74,12 @@ export default function Settings() {
         company_bank_iban: form.company_bank_iban,
         company_bank_bic: form.company_bank_bic,
         company_bank_account_holder: form.company_bank_account_holder,
+        smtp_host: form.smtp_host,
+        smtp_port: form.smtp_port,
+        smtp_user: form.smtp_user,
+        smtp_password: form.smtp_password,
+        smtp_from: form.smtp_from,
+        smtp_tls: form.smtp_tls,
         termin_marktplatz_api_key: form.termin_marktplatz_api_key,
       })
       setSuccess(true)
@@ -195,6 +213,73 @@ export default function Settings() {
             value={form.company_bank_bic}
             onChange={(e) => setForm((f) => ({ ...f, company_bank_bic: e.target.value }))}
             placeholder="COBADEFFXXX"
+          />
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>E-Mail-Versand (SMTP)</h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Für den Versand von Rechnungen und Dokumenten per E-Mail. Ohne Konfiguration ist der E-Mail-Button deaktiviert.
+        </p>
+        <div className="form-group">
+          <label htmlFor="smtp_host">SMTP-Host *</label>
+          <input
+            id="smtp_host"
+            type="text"
+            value={form.smtp_host}
+            onChange={(e) => setForm((f) => ({ ...f, smtp_host: e.target.value }))}
+            placeholder="smtp.example.de"
+          />
+        </div>
+        <div className="form-row" style={{ display: 'flex', gap: '1rem' }}>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label htmlFor="smtp_port">Port</label>
+            <input
+              id="smtp_port"
+              type="text"
+              value={form.smtp_port}
+              onChange={(e) => setForm((f) => ({ ...f, smtp_port: e.target.value }))}
+              placeholder="587"
+            />
+          </div>
+          <div className="form-group" style={{ flex: 2 }}>
+            <label>
+              <input
+                type="checkbox"
+                checked={form.smtp_tls === 'true'}
+                onChange={(e) => setForm((f) => ({ ...f, smtp_tls: e.target.checked ? 'true' : 'false' }))}
+              />
+              {' '}TLS verwenden
+            </label>
+          </div>
+        </div>
+        <div className="form-group">
+          <label htmlFor="smtp_user">Benutzername</label>
+          <input
+            id="smtp_user"
+            type="text"
+            value={form.smtp_user}
+            onChange={(e) => setForm((f) => ({ ...f, smtp_user: e.target.value }))}
+            placeholder="Optional bei Auth"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="smtp_password">Passwort</label>
+          <input
+            id="smtp_password"
+            type="password"
+            value={form.smtp_password}
+            onChange={(e) => setForm((f) => ({ ...f, smtp_password: e.target.value }))}
+            placeholder="Leer lassen = unverändert"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="smtp_from">Absender-Adresse</label>
+          <input
+            id="smtp_from"
+            type="email"
+            value={form.smtp_from}
+            onChange={(e) => setForm((f) => ({ ...f, smtp_from: e.target.value }))}
+            placeholder="rechnungen@firma.de (sonst Benutzername)"
           />
         </div>
 

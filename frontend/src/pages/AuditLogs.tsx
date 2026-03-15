@@ -10,10 +10,12 @@ const ACTION_LABELS: Record<string, string> = {
   issue: 'Ausgestellt',
   mark_paid: 'Als bezahlt',
   reminder: 'Mahnung',
+  email_sent: 'Per E-Mail versendet',
 }
 
 const ENTITY_LABELS: Record<string, string> = {
   invoice: 'Rechnung',
+  document: 'Dokument',
   customer: 'Kunde',
 }
 
@@ -108,7 +110,13 @@ export default function AuditLogs() {
                     {log.entity_id ? log.entity_id.slice(0, 8) + '…' : '–'}
                   </td>
                   <td>
-                    {log.new_values && Object.keys(log.new_values).length > 0 && (
+                    {log.action === 'email_sent' && log.new_values?.recipient_email && (
+                      <span title={JSON.stringify(log.new_values)}>
+                        An: {log.new_values.recipient_email}
+                        {log.new_values.attachment_filename && ` (${log.new_values.attachment_filename})`}
+                      </span>
+                    )}
+                    {log.action !== 'email_sent' && log.new_values && Object.keys(log.new_values).length > 0 && (
                       <span title={JSON.stringify(log.new_values)}>
                         {Object.entries(log.new_values)
                           .map(([k, v]) => `${k}: ${v}`)

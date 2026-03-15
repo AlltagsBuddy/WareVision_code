@@ -60,6 +60,12 @@ export const settingsApi = {
     company_bank_iban: string
     company_bank_bic: string
     company_bank_account_holder: string
+    smtp_host: string
+    smtp_port: string
+    smtp_user: string
+    smtp_password: string
+    smtp_from: string
+    smtp_tls: string
   }>('/settings'),
   update: (data: {
     company_name?: string
@@ -72,6 +78,12 @@ export const settingsApi = {
     company_bank_iban?: string
     company_bank_bic?: string
     company_bank_account_holder?: string
+    smtp_host?: string
+    smtp_port?: string
+    smtp_user?: string
+    smtp_password?: string
+    smtp_from?: string
+    smtp_tls?: string
     termin_marktplatz_api_key?: string
   }) =>
     api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
@@ -279,6 +291,11 @@ export const documentsApi = {
     api<any>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) =>
     api<void>(`/documents/${id}`, { method: 'DELETE' }),
+  sendEmail: (id: string, recipientEmail?: string) =>
+    api<{ message: string; recipient: string }>('/documents/' + id + '/send-email', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_email: recipientEmail || undefined }),
+    }),
   getDownloadUrl: (id: string) => `${API_BASE}/documents/${id}/download`,
   getBlob: async (id: string): Promise<Blob> => {
     const token = getToken()
@@ -339,6 +356,11 @@ export const invoicesApi = {
     if (!res.ok) throw new Error('PDF konnte nicht geladen werden')
     return res.blob()
   },
+  sendEmail: (id: string, recipientEmail?: string) =>
+    api<{ message: string; recipient: string }>('/invoices/' + id + '/send-email', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_email: recipientEmail || undefined }),
+    }),
   downloadZugferd: async (id: string): Promise<Blob> => {
     const token = getToken()
     const res = await fetch(`${API_BASE}/invoices/${id}/zugferd`, {

@@ -32,6 +32,7 @@ export default function Invoices() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [previewModal, setPreviewModal] = useState<{ invoiceNumber: string; url: string } | null>(null)
+  const [sendEmailModal, setSendEmailModal] = useState<{ inv: any; recipientEmail: string } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -68,6 +69,31 @@ export default function Invoices() {
     const c = customers.find((x) => x.id === customerId)
     if (!c) return '–'
     return c.company_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || '–'
+  }
+
+  const getCustomerEmail = (customerId: string) => {
+    const c = customers.find((x) => x.id === customerId)
+    return c?.email || ''
+  }
+
+  const handleSendEmail = (inv: any) => {
+    setSendEmailModal({ inv, recipientEmail: getCustomerEmail(inv.customer_id) })
+  }
+
+  const handleSendEmailSubmit = async () => {
+    if (!sendEmailModal) return
+    const email = sendEmailModal.recipientEmail.trim()
+    if (!email) {
+      alert('Bitte E-Mail-Adresse eingeben.')
+      return
+    }
+    try {
+      await invoicesApi.sendEmail(sendEmailModal.inv.id, email)
+      alert(`Rechnung wurde an ${email} versendet.`)
+      setSendEmailModal(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'E-Mail-Versand fehlgeschlagen')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -389,6 +415,30 @@ export default function Invoices() {
         </div>
       )}
 
+      {sendEmailModal && (
+        <div className="modal-overlay" onClick={() => setSendEmailModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Rechnung per E-Mail versenden</h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+              Rechnung {sendEmailModal.inv.invoice_number} wird als PDF-Anhang versendet. Der Versand wird im Audit-Log dokumentiert.
+            </p>
+            <div className="form-group">
+              <label>Empfänger-E-Mail *</label>
+              <input
+                type="email"
+                value={sendEmailModal.recipientEmail}
+                onChange={(e) => setSendEmailModal({ ...sendEmailModal, recipientEmail: e.target.value })}
+                placeholder="kunde@beispiel.de"
+              />
+            </div>
+            <div className="form-actions">
+              <button type="button" onClick={() => setSendEmailModal(null)} className="btn-secondary">Abbrechen</button>
+              <button type="button" onClick={handleSendEmailSubmit} className="btn-primary">Versenden</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewModal && (
         <div className="modal-overlay" onClick={closePreview}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900 }}>
@@ -483,6 +533,13 @@ export default function Invoices() {
                       <>
                         <button
                           type="button"
+                          onClick={() => handleSendEmail(inv)}
+                          className="btn-secondary btn-sm"
+                        >
+                          E-Mail
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handlePreviewPdf(inv.id, inv.invoice_number)}
                           className="btn-secondary btn-sm"
                         >
@@ -505,6 +562,13 @@ export default function Invoices() {
                           className="btn-secondary btn-sm"
                         >
                           Als bezahlt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSendEmail(inv)}
+                          className="btn-secondary btn-sm"
+                        >
+                          E-Mail
                         </button>
                         <button
                           type="button"
@@ -531,6 +595,13 @@ export default function Invoices() {
                     )}
                     {(inv.status === 'paid') && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => handleSendEmail(inv)}
+                          className="btn-secondary btn-sm"
+                        >
+                          E-Mail
+                        </button>
                         <button
                           type="button"
                           onClick={() => handlePreviewPdf(inv.id, inv.invoice_number)}

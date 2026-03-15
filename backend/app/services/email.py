@@ -3,9 +3,9 @@
 import logging
 import smtplib
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -57,7 +57,12 @@ def send_email_with_attachment(
     msg["To"] = to_email
     msg.attach(MIMEText(body, "plain", "utf-8"))
 
-    part = MIMEApplication(attachment_data, _subtype=attachment_content_type.split("/")[-1] or "pdf")
+    main_type = (attachment_content_type or "application/pdf").split("/")[0]
+    sub_type = (attachment_content_type or "application/pdf").split("/")[-1]
+    if main_type == "image":
+        part = MIMEImage(attachment_data, _subtype=sub_type)
+    else:
+        part = MIMEApplication(attachment_data, _subtype=sub_type or "pdf")
     part.add_header("Content-Disposition", "attachment", filename=attachment_filename)
     msg.attach(part)
 
