@@ -23,7 +23,9 @@ export default function BarcodeScanner({ open, onScan, onClose }: BarcodeScanner
 
     const startScanner = async () => {
       try {
-        const scanner = new Html5Qrcode(id)
+        // useBarCodeDetectorIfSupported: false → ZXing statt nativer BarcodeDetector API
+        // Behebt Kamera-Probleme auf Samsung/Android Chrome (schwarzer Bildschirm)
+        const scanner = new Html5Qrcode(id, { useBarCodeDetectorIfSupported: false })
         scannerRef.current = scanner
         await scanner.start(
           { facingMode: 'environment' },
@@ -57,7 +59,7 @@ export default function BarcodeScanner({ open, onScan, onClose }: BarcodeScanner
     setFileError(null)
     if (!file) return
     try {
-      const scanner = new Html5Qrcode(fileId)
+      const scanner = new Html5Qrcode(fileId, { useBarCodeDetectorIfSupported: false })
       const decodedText = await scanner.scanFile(file, false)
       onScan(decodedText)
       onClose()

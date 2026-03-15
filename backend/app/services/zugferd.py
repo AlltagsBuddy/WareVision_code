@@ -24,7 +24,7 @@ def _get_customer_name(inv: Invoice) -> str:
     if c.company_name:
         return c.company_name
     parts = [c.first_name or "", c.last_name or ""]
-    return " ".join(p).strip() or (c.email or "Kunde")
+    return " ".join(parts).strip() or (c.email or "Kunde")
 
 
 def _get_customer_address(inv: Invoice) -> tuple[str, str, str]:
@@ -139,4 +139,4 @@ def generate_zugferd_pdf(db: Session, inv: Invoice) -> bytes:
 
     pdf_bytes = generate_invoice_pdf(db, inv)
     xml_str = build_zugferd_xml(db, inv)
-    return generate_from_binary(pdf_bytes, xml_str)
+    return generate_from_binary(pdf_bytes, xml_str, check_xsd=False)

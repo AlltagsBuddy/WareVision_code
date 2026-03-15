@@ -27,7 +27,7 @@ def _get_customer_name(inv: Invoice) -> str:
     if c.company_name:
         return c.company_name
     parts = [c.first_name or "", c.last_name or ""]
-    return " ".join(p).strip() or (c.email or "–")
+    return " ".join(parts).strip() or (c.email or "–")
 
 
 def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
