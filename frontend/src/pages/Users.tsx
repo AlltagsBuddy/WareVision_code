@@ -54,6 +54,7 @@ export default function Users() {
     try {
       if (editing) {
         const updateData: Record<string, unknown> = {
+          email: form.email.trim(),
           first_name: form.first_name,
           last_name: form.last_name,
         }
@@ -140,9 +141,13 @@ export default function Users() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required
-                  disabled={!!editing}
                   placeholder="user@warevision.local"
                 />
+                {editing && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+                    Änderung gilt sofort für den Login.
+                  </p>
+                )}
               </div>
               <div className="form-row">
                 <div className="form-group">

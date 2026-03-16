@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """Update user."""
 
+    email: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     is_active: Optional[bool] = None

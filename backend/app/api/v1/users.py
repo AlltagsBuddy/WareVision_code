@@ -97,6 +97,16 @@ def update_user(
     data = payload.model_dump(exclude_unset=True)
     if "password" in data:
         user.password_hash = get_password_hash(data.pop("password"))
+    if "email" in data:
+        new_email = (data.pop("email") or "").strip().lower()
+        if new_email and new_email != user.email:
+            existing = db.query(User).filter(User.email == new_email).first()
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Benutzer mit dieser E-Mail existiert bereits",
+                )
+            user.email = new_email
     for key, value in data.items():
         setattr(user, key, value)
     db.commit()
