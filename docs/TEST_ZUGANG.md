@@ -55,6 +55,79 @@ Stelle sicher, dass die Ports **5173** (Frontend) und **8000** (API, falls direk
 
 ---
 
+## Zugriff über Internet (ngrok)
+
+Mit ngrok kannst du einen **öffentlichen Link** erstellen, über den WareVision von überall auf der Welt erreichbar ist (z.B. Smartphone unterwegs, Kunde, externe Tester).
+
+### Schritt 1: ngrok installieren
+
+1. Öffne: https://ngrok.com/download
+2. Lade ngrok für Windows herunter
+3. Entpacke die ZIP-Datei (z.B. nach `C:\ngrok` oder `C:\Users\<DEIN-NAME>\Downloads`)
+4. Optional: Lege den ngrok-Ordner in den PATH, damit du `ngrok` von überall aufrufen kannst
+
+**Alternativ mit winget (PowerShell als Admin):**
+```powershell
+winget install ngrok.ngrok
+```
+
+### Schritt 2: ngrok-Account (einmalig)
+
+1. Gehe zu https://dashboard.ngrok.com/signup
+2. Erstelle einen kostenlosen Account
+3. Unter https://dashboard.ngrok.com/get-started/your-authtoken findest du deinen Authtoken
+4. In der PowerShell ausführen:
+   ```powershell
+   ngrok config add-authtoken DEIN_AUTHTOKEN
+   ```
+   (Ersetze `DEIN_AUTHTOKEN` durch den Token aus dem Dashboard)
+
+### Schritt 3: WareVision starten
+
+Im Projektordner `D:\WareVision\WareVision_code`:
+
+```powershell
+docker compose up -d --build
+```
+
+Warte, bis alle Container laufen.
+
+### Schritt 4: ngrok starten
+
+**Neues PowerShell-Fenster** öffnen, dann:
+
+```powershell
+ngrok http 5173
+```
+
+Oder, wenn ngrok nicht im PATH liegt, mit vollem Pfad:
+
+```powershell
+C:\path\to\ngrok.exe http 5173
+```
+
+### Schritt 5: Link kopieren
+
+Im ngrok-Fenster erscheint eine Ausgabe wie:
+
+```
+Forwarding   https://abc123.ngrok-free.app -> http://localhost:5173
+```
+
+**Dein Link:** `https://abc123.ngrok-free.app`
+
+- **Login:** `https://abc123.ngrok-free.app/login`
+- **Login mit vorausgefüllter E-Mail:** `https://abc123.ngrok-free.app/login?email=admin@warevision.local`
+- **Registrierung:** `https://abc123.ngrok-free.app/register`
+
+### Schritt 6: Link teilen
+
+Kopiere den Link und sende ihn per E-Mail, WhatsApp oder wo auch immer. Der Empfänger öffnet ihn im Browser – fertig.
+
+**Hinweis:** Die kostenlose ngrok-Version erzeugt bei jedem Start eine neue URL. Für eine feste URL brauchst du einen kostenpflichtigen Plan.
+
+---
+
 ## CORS für externe Domains (optional)
 
 Wenn Frontend und Backend auf **verschiedenen Domains** laufen, müssen zusätzliche CORS-Origins konfiguriert werden.
