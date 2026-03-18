@@ -68,10 +68,27 @@ CORS_ORIGINS_EXTRA=https://test.warevision.de,http://192.168.1.100:5173
 
 ---
 
+## Link teilen – neue Benutzer anlegen
+
+Du kannst einen Link teilen, über den sich neue Benutzer selbst registrieren können:
+
+**Registrierungs-Link:** `http://<DEINE-URL>/register`
+
+Beispiel: `http://192.168.1.100:5173/register`
+
+Der Empfänger:
+1. Öffnet den Link
+2. Legt ein Konto an (E-Mail, Name, Passwort)
+3. Wird automatisch angemeldet und kann direkt arbeiten
+
+Neue Benutzer erhalten die Rolle **Werkstatt** (kein Admin-Zugriff).
+
+---
+
 ## Zusammenfassung für Tester
 
-**Link:** `http://<DEINE-URL>/login`  
-**E-Mail:** admin@warevision.local  
-**Passwort:** admin123  
+**Login:** `http://<DEINE-URL>/login`  
+**Registrierung:** `http://<DEINE-URL>/register`  
 
-Das war's – ein Klick, Zugangsdaten eingeben, fertig.
+**Admin-Zugang:** admin@warevision.local / admin123  
+**Neue Benutzer:** Über /register Konto anlegen

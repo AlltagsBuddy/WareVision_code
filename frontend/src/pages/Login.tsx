@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Login() {
@@ -57,6 +57,9 @@ export default function Login() {
             {loading ? 'Anmelden...' : 'Anmelden'}
           </button>
         </form>
+        <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+          Noch kein Konto? <Link to="/register">Konto anlegen</Link>
+        </p>
       </div>
     </div>
   )

@@ -39,6 +39,11 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  register: (data: { email: string; first_name: string; last_name: string; password: string }) =>
+    api<{ access_token: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   me: () => api<{ id: string; email: string; first_name: string; last_name: string; role_name: string }>('/auth/me'),
   exportMyData: () => api<Record<string, unknown>>('/auth/me/export'),
   changePassword: (current_password: string, new_password: string) =>

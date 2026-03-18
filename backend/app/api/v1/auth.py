@@ -10,7 +10,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest, Token, UserResponse
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterRequest, Token, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,6 +35,40 @@ def login(
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
 
+    access_token = create_access_token(subject=user.id)
+    return Token(access_token=access_token)
+
+
+@router.post("/register", response_model=Token)
+def register(
+    payload: RegisterRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> Token:
+    """Öffentliche Registrierung. Neuer Benutzer erhält Rolle 'werkstatt'."""
+    from app.models.role import Role
+
+    existing = db.query(User).filter(User.email == payload.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ein Benutzer mit dieser E-Mail existiert bereits",
+        )
+    role = db.query(Role).filter(Role.name == "werkstatt").first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Rolle 'werkstatt' nicht gefunden. Bitte init_db ausführen.",
+        )
+    user = User(
+        email=payload.email,
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+        password_hash=get_password_hash(payload.password),
+        role_id=role.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
     access_token = create_access_token(subject=user.id)
     return Token(access_token=access_token)
 
