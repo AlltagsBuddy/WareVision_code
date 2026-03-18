@@ -11,7 +11,7 @@ from app.core.security import get_password_hash
 from app.models import Role, User
 
 
-def init_roles_and_admin(db):
+def init_roles_and_admin(db, reset_admin: bool = False):
     """Create default roles and admin user."""
     admin_role = db.query(Role).filter(Role.name == "admin").first()
     if not admin_role:
@@ -35,6 +35,10 @@ def init_roles_and_admin(db):
             password_hash=get_password_hash("admin123"),
         )
         db.add(admin_user)
+    elif reset_admin:
+        admin_user.password_hash = get_password_hash("admin123")
+        admin_user.is_active = True
+        print("Admin-Passwort auf admin123 zurückgesetzt.")
 
     db.commit()
     print("Roles and admin user created.")
@@ -43,6 +47,16 @@ def init_roles_and_admin(db):
 
 def main():
     """Run init."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--reset-admin",
+        action="store_true",
+        help="Admin-Passwort auf admin123 zurücksetzen (falls Login nicht funktioniert)",
+    )
+    args = parser.parse_args()
+
     from app.core.database import Base, init_db
 
     init_db()  # Registriert alle Models bei Base.metadata
@@ -51,7 +65,7 @@ def main():
 
     db = SessionLocal()
     try:
-        init_roles_and_admin(db)
+        init_roles_and_admin(db, reset_admin=args.reset_admin)
     finally:
         db.close()
 
