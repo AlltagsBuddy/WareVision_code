@@ -14,6 +14,10 @@ export async function api<T>(
     ...(options.headers as Record<string, string>),
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
+  // ngrok Free: Browser-Warnung überspringen, damit API-Anfragen durchgehen
+  if (typeof window !== 'undefined' && window.location?.hostname?.includes('ngrok')) {
+    headers['ngrok-skip-browser-warning'] = '1'
+  }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   if (res.status === 401) {

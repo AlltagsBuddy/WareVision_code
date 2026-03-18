@@ -126,6 +126,17 @@ Kopiere den Link und sende ihn per E-Mail, WhatsApp oder wo auch immer. Der Empf
 
 **Hinweis:** Die kostenlose ngrok-Version erzeugt bei jedem Start eine neue URL. Für eine feste URL brauchst du einen kostenpflichtigen Plan.
 
+### Weiße/leere Seite? – ngrok „Visit Site“ anklicken
+
+Bei der **kostenlosen ngrok-Version** erscheint beim ersten Besuch eine Zwischenseite von ngrok. Sie kann wie eine leere weiße Seite wirken.
+
+**Lösung:**  
+1. Auf der Seite nach **„Visit Site“** oder **„Besuchen“** suchen – oft ein kleiner Button unten oder in der Mitte.  
+2. **Einmal darauf klicken** – danach wird ein Cookie gesetzt und die App lädt normal.  
+3. Falls nichts zu sehen ist: **Strg+F5** (Hard Refresh) oder die Seite in einem **Inkognito-Fenster** öffnen, dann erneut nach dem Button suchen.
+
+Ohne Klick auf „Visit Site“ wird die eigentliche App nicht geladen – das ist eine Sicherheitsfunktion von ngrok.
+
 ---
 
 ## CORS für externe Domains (optional)
