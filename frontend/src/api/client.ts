@@ -26,8 +26,16 @@ export async function api<T>(
     throw new Error('Unauthorized')
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || res.statusText || 'Fehler')
+    const ct = res.headers.get('content-type') || ''
+    const err = ct.includes('application/json')
+      ? await res.json().catch(() => ({}))
+      : {}
+    let msg = err.detail || err.message || res.statusText || 'Fehler'
+    // ngrok-Interstitial liefert HTML statt JSON
+    if (ct.includes('text/html')) {
+      msg = 'Bitte zuerst auf „Visit Site“ klicken (ngrok-Zwischenseite) und erneut versuchen.'
+    }
+    throw new Error(msg)
   }
   if (res.status === 204) return undefined as T
   return res.json()

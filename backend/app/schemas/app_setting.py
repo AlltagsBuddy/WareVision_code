@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class AppSettingsOut(BaseModel):
     """Company settings for invoices and documents."""
 
+    termin_marktplatz_configured: bool = False  # True wenn API-Key gesetzt (ohne Wert zu exponieren)
     company_name: str = ""
     company_address: str = ""
     company_vat_id: str = ""

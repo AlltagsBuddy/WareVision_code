@@ -35,10 +35,13 @@ export default function Login() {
             <label htmlFor="email">E-Mail</label>
             <input
               id="email"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              placeholder="z.B. admin@warevision.local"
               autoFocus
             />
           </div>
@@ -59,6 +62,9 @@ export default function Login() {
         </form>
         <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
           Noch kein Konto? <Link to="/register">Konto anlegen</Link>
+        </p>
+        <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-muted)', opacity: 0.8 }}>
+          Standard-Admin: admin@warevision.local / admin123
         </p>
       </div>
     </div>

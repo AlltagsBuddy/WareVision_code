@@ -5,6 +5,7 @@ import { settingsApi } from '../api/client'
 
 export default function Settings() {
   const { user } = useAuth()
+  const [terminMarktplatzConfigured, setTerminMarktplatzConfigured] = useState(false)
   const [form, setForm] = useState({
     company_name: '',
     company_address: '',
@@ -32,7 +33,8 @@ export default function Settings() {
   useEffect(() => {
     settingsApi
       .get()
-      .then((data) =>
+      .then((data: { termin_marktplatz_configured?: boolean } & Record<string, string>) => {
+        setTerminMarktplatzConfigured(!!data.termin_marktplatz_configured)
         setForm({
           company_name: data.company_name || '',
           company_address: data.company_address || '',
@@ -52,7 +54,7 @@ export default function Settings() {
           smtp_tls: data.smtp_tls || 'true',
           termin_marktplatz_api_key: '',
         })
-      )
+      })
       .catch(() => setError('Einstellungen konnten nicht geladen werden.'))
       .finally(() => setLoading(false))
   }, [])
@@ -283,17 +285,31 @@ export default function Settings() {
           />
         </div>
 
-        <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>Sonstiges</h3>
+        <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>Terminmarktplatz</h3>
+        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Gebuchte Termine von Terminmarktplatz.de werden automatisch in den Terminplaner übernommen.
+        </p>
         <div className="form-group">
-          <label htmlFor="termin_marktplatz_api_key">Termin-Marktplatz API-Schlüssel</label>
+          <label htmlFor="termin_marktplatz_api_key">API-Schlüssel</label>
           <input
             id="termin_marktplatz_api_key"
             type="password"
             value={form.termin_marktplatz_api_key}
             onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_api_key: e.target.value }))}
-            placeholder="Optional – für Webhook-Authentifizierung"
+            placeholder="Geheimer Schlüssel für Webhook-Authentifizierung"
           />
         </div>
+        {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--color-bg-secondary)', borderRadius: 6, fontSize: '0.85rem' }}>
+            <strong>Webhook-URL für Terminmarktplatz:</strong>
+            <code style={{ display: 'block', marginTop: '0.5rem', wordBreak: 'break-all' }}>
+              {typeof window !== 'undefined' ? `${window.location.origin}/api/v1/appointments/webhook/termin-marktplatz` : ''}
+            </code>
+            <p style={{ margin: '0.5rem 0 0 0', color: 'var(--color-text-muted)' }}>
+              Diese URL in Terminmarktplatz hinterlegen. Header: <code>X-API-Key: [dein Schlüssel]</code>
+            </p>
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
         {success && <p className="success">Einstellungen gespeichert.</p>}
         <button type="submit" className="btn btn-primary" disabled={submitting}>

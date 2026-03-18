@@ -47,7 +47,9 @@ def get_settings(
     """Get company settings (admin only)."""
     d = _settings_to_dict(db)
     smtp_pw = d.get("smtp_password", "")
+    api_key = d.get("termin_marktplatz_api_key", "")
     return AppSettingsOut(
+        termin_marktplatz_configured=bool(api_key and api_key.strip()),
         company_name=d.get("company_name", ""),
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),
@@ -84,6 +86,8 @@ def update_settings(
         val = getattr(payload, key, None)
         if key == "smtp_password" and (val is None or val == "********"):
             continue  # Passwort nicht überschreiben wenn leer oder Platzhalter
+        if key == "termin_marktplatz_api_key" and (val is None or val == ""):
+            continue  # API-Schlüssel nicht löschen wenn leer gelassen
         if val is not None:
             row = db.query(AppSetting).filter(AppSetting.key == key).first()
             if row:
@@ -93,7 +97,9 @@ def update_settings(
     db.commit()
     d = _settings_to_dict(db)
     smtp_pw = d.get("smtp_password", "")
+    api_key = d.get("termin_marktplatz_api_key", "")
     return AppSettingsOut(
+        termin_marktplatz_configured=bool(api_key and api_key.strip()),
         company_name=d.get("company_name", ""),
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),
