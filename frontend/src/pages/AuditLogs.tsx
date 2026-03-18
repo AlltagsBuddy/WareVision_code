@@ -11,12 +11,17 @@ const ACTION_LABELS: Record<string, string> = {
   mark_paid: 'Als bezahlt',
   reminder: 'Mahnung',
   email_sent: 'Per E-Mail versendet',
+  webhook_termin_marktplatz_import: 'Terminmarktplatz: Import',
+  webhook_termin_marktplatz_cancel: 'Terminmarktplatz: Storno',
+  webhook_termin_marktplatz_update: 'Terminmarktplatz: Update',
+  webhook_termin_marktplatz_error: 'Terminmarktplatz: Fehler',
 }
 
 const ENTITY_LABELS: Record<string, string> = {
   invoice: 'Rechnung',
   document: 'Dokument',
   customer: 'Kunde',
+  appointment: 'Termin',
 }
 
 export default function AuditLogs() {

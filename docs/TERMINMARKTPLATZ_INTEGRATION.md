@@ -320,3 +320,48 @@ Invoke-RestMethod -Uri $url -Method POST -ContentType "application/json" -Header
 **Ungültig:**
 - `20.03.2025 10:00`
 - `2025-03-20` (ohne Uhrzeit)
+
+---
+
+## Fehlersuche: Termine kommen nicht an
+
+### 1. Verbindung prüfen (Health-Check)
+
+```powershell
+$url = "https://DEINE-WAREVISION-URL/api/v1/appointments/webhook/termin-marktplatz/health"
+$apiKey = "DEIN_API_SCHLÜSSEL"
+Invoke-RestMethod -Uri $url -Headers @{ "X-API-Key" = $apiKey }
+```
+
+**Erwartung:** `{"status":"ok","message":"API-Schlüssel gültig, Webhook bereit"}`
+
+- **401:** API-Schlüssel falsch oder fehlt – prüfe Header `X-API-Key`
+- **503:** API-Schlüssel in WareVision nicht hinterlegt – Einstellungen prüfen
+- **Keine Antwort:** WareVision nicht erreichbar (Firewall, falsche URL, ngrok nicht aktiv)
+
+### 2. Audit-Log in WareVision prüfen
+
+**WareVision** → **Audit-Log** → Filter **Aktion** → „Terminmarktplatz: …“
+
+- **Import/Storno/Update:** Webhook wurde verarbeitet
+- **Fehler:** Webhook kam an, aber Payload war ungültig – `new_values` zeigt Details
+
+### 3. Backend-Logs prüfen
+
+```powershell
+docker compose logs backend -f
+```
+
+Bei jedem Webhook-Aufruf erscheinen Meldungen wie:
+- `Terminmarktplatz webhook received: external_id=...`
+- `Terminmarktplatz: Termin importiert external_id=...`
+- Bei Fehlern: `external_booking_id fehlt`, `Datumsparsing fehlgeschlagen`, etc.
+
+### 4. Häufige Ursachen
+
+| Problem | Lösung |
+|---------|--------|
+| WareVision nur lokal (localhost) | ngrok oder öffentliche Domain nutzen – Terminmarktplatz-Server muss die URL erreichen |
+| API-Schlüssel stimmt nicht | Exakt gleichen Schlüssel in beiden Systemen verwenden (keine Leerzeichen) |
+| Falsches Datumsformat | ISO 8601 mit Zeitzone, z.B. `2025-03-20T10:00:00+01:00` |
+| Payload in `data` oder `booking` gewrappt | Wird unterstützt – WareVision erkennt `payload.data` und `payload.booking` |

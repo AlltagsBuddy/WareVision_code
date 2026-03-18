@@ -105,21 +105,37 @@ def _verify_termin_marktplatz_api_key(
     db: Annotated[Session, Depends(get_db)] = None,
 ) -> None:
     """Prüft API-Key für Terminmarktplatz-Webhook."""
+    import logging
+    log = logging.getLogger(__name__)
     stored = db.query(AppSetting).filter(AppSetting.key == "termin_marktplatz_api_key").first()
     expected = (stored.value or "").strip() if stored else ""
     if not expected:
+        log.warning("Terminmarktplatz webhook: API-Schlüssel nicht konfiguriert")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Terminmarktplatz-Integration nicht konfiguriert. API-Schlüssel in Einstellungen hinterlegen.",
         )
-    token = x_api_key
+    token = (x_api_key or "").strip()
     if not token and authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
+        token = (authorization[7:] or "").strip()
     if not token or token != expected:
+        log.warning("Terminmarktplatz webhook: API-Schlüssel ungültig (Header vorhanden: %s)", bool(x_api_key or authorization))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Ungültiger API-Schlüssel",
         )
+
+
+@router.get("/webhook/termin-marktplatz/health")
+def termin_marktplatz_webhook_health(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[None, Depends(_verify_termin_marktplatz_api_key)],
+) -> dict:
+    """
+    Prüft Verbindung und API-Schlüssel. GET mit Header X-API-Key.
+    Gibt 200 zurück wenn der Schlüssel gültig ist.
+    """
+    return {"status": "ok", "message": "API-Schlüssel gültig, Webhook bereit"}
 
 
 @router.post("/webhook/termin-marktplatz", response_model=AppointmentRead)
@@ -134,12 +150,17 @@ def termin_marktplatz_webhook(
     Erwartetes JSON: external_booking_id, starts_at, ends_at (ISO), customer_*, vehicle_*, optional action (booking|cancel|update).
     """
     from app.services.termin_marktplatz import process_webhook
+    from app.services.audit import log_audit
 
     result = process_webhook(db, payload)
     if result is None:
+        ext_id = payload.get("external_booking_id") or payload.get("booking_id")
+        if not ext_id and isinstance(payload.get("data"), dict):
+            ext_id = payload["data"].get("external_booking_id") or payload["data"].get("booking_id")
+        log_audit(db, user_id=None, entity_type="appointment", entity_id=None, action="webhook_termin_marktplatz_error", new_values={"error": "Ungültige oder unvollständige Buchungsdaten", "external_booking_id": str(ext_id) if ext_id else None, "payload_keys": list(payload.keys())})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ungültige oder unvollständige Buchungsdaten",
+            detail="Ungültige oder unvollständige Buchungsdaten. Pflichtfelder: external_booking_id, starts_at, ends_at (ISO 8601)",
         )
     return result
 

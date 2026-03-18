@@ -1,5 +1,6 @@
 """Terminmarktplatz-Integration: Webhook-Verarbeitung und Import-Logik."""
 
+import logging
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -7,6 +8,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment
+
+logger = logging.getLogger(__name__)
 from app.models.customer import Customer
 from app.models.manufacturer import Manufacturer
 from app.models.user import User
@@ -54,9 +57,19 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
     - action=cancel: Termin stornieren
     - action=update: Termin aktualisieren (falls unterstützt)
     """
-    data = _normalize_webhook_payload(payload)
+    # Payload kann in "data" oder "booking" gewrappt sein
+    raw = payload
+    if isinstance(payload.get("data"), dict):
+        raw = payload["data"]
+    elif isinstance(payload.get("booking"), dict):
+        raw = payload["booking"]
+
+    logger.info("Terminmarktplatz webhook received: external_id=%s", raw.get("external_booking_id") or raw.get("booking_id") or raw.get("id"))
+
+    data = _normalize_webhook_payload(raw)
     external_id = data["external_booking_id"]
     if not external_id:
+        logger.warning("Terminmarktplatz webhook: external_booking_id fehlt, payload keys=%s", list(raw.keys()))
         return None
 
     existing = (
@@ -71,6 +84,9 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
         existing.status = "cancelled"
         db.commit()
         db.refresh(existing)
+        from app.services.audit import log_audit
+        log_audit(db, user_id=None, entity_type="appointment", entity_id=existing.id, action="webhook_termin_marktplatz_cancel", new_values={"external_booking_id": external_id})
+        logger.info("Terminmarktplatz: Termin storniert external_id=%s", external_id)
         return existing
 
     if action == "update" and existing:
@@ -90,6 +106,9 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
                 pass
         db.commit()
         db.refresh(existing)
+        from app.services.audit import log_audit
+        log_audit(db, user_id=None, entity_type="appointment", entity_id=existing.id, action="webhook_termin_marktplatz_update", new_values={"external_booking_id": external_id})
+        logger.info("Terminmarktplatz: Termin aktualisiert external_id=%s", external_id)
         return existing
 
     # booking: Dublettenschutz
@@ -104,10 +123,12 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
         ends_at = datetime.fromisoformat(
             str(data["ends_at"]).replace("Z", "+00:00")
         )
-    except (ValueError, AttributeError, TypeError):
+    except (ValueError, AttributeError, TypeError) as e:
+        logger.warning("Terminmarktplatz webhook: Datumsparsing fehlgeschlagen starts_at=%s ends_at=%s error=%s", data.get("starts_at"), data.get("ends_at"), e)
         return None
 
     if starts_at >= ends_at:
+        logger.warning("Terminmarktplatz webhook: ends_at muss nach starts_at liegen")
         return None
 
     customer_id = None
@@ -186,4 +207,7 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
     db.add(apt)
     db.commit()
     db.refresh(apt)
+    from app.services.audit import log_audit
+    log_audit(db, user_id=None, entity_type="appointment", entity_id=apt.id, action="webhook_termin_marktplatz_import", new_values={"external_booking_id": external_id, "title": apt.title})
+    logger.info("Terminmarktplatz: Termin importiert external_id=%s id=%s", external_id, apt.id)
     return apt
