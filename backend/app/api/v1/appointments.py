@@ -99,6 +99,15 @@ def create_appointment(
     return apt
 
 
+@router.get("/webhook/termin-marktplatz/ping")
+def termin_marktplatz_webhook_ping() -> dict:
+    """
+    Öffentlicher Ping – keine Auth. Prüft ob Anfragen WareVision erreichen.
+    Gibt 200 zurück wenn der Server erreichbar ist.
+    """
+    return {"status": "ok", "message": "WareVision Webhook erreichbar"}
+
+
 def _verify_termin_marktplatz_api_key(
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
     authorization: Annotated[str | None, Header()] = None,
@@ -155,12 +164,20 @@ def termin_marktplatz_webhook(
     result = process_webhook(db, payload)
     if result is None:
         ext_id = payload.get("external_booking_id") or payload.get("booking_id")
-        if not ext_id and isinstance(payload.get("data"), dict):
-            ext_id = payload["data"].get("external_booking_id") or payload["data"].get("booking_id")
-        log_audit(db, user_id=None, entity_type="appointment", entity_id=None, action="webhook_termin_marktplatz_error", new_values={"error": "Ungültige oder unvollständige Buchungsdaten", "external_booking_id": str(ext_id) if ext_id else None, "payload_keys": list(payload.keys())})
+        raw = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        if not ext_id and isinstance(raw, dict):
+            ext_id = raw.get("external_booking_id") or raw.get("booking_id")
+        err_detail = {
+            "error": "Ungültige oder unvollständige Buchungsdaten",
+            "hint": "Pflichtfelder: external_booking_id, starts_at, ends_at (ISO 8601, z.B. 2025-03-20T10:00:00+01:00)",
+            "received_keys": list(payload.keys()),
+            "received_starts_at": payload.get("starts_at") or (raw.get("starts_at") if isinstance(raw, dict) else None),
+            "received_ends_at": payload.get("ends_at") or (raw.get("ends_at") if isinstance(raw, dict) else None),
+        }
+        log_audit(db, user_id=None, entity_type="appointment", entity_id=None, action="webhook_termin_marktplatz_error", new_values={"error": err_detail["error"], "external_booking_id": str(ext_id) if ext_id else None, "payload_keys": list(payload.keys())})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ungültige oder unvollständige Buchungsdaten. Pflichtfelder: external_booking_id, starts_at, ends_at (ISO 8601)",
+            detail=err_detail,
         )
     return result
 

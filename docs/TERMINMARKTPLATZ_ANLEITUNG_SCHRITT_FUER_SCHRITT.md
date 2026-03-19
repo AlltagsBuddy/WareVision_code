@@ -248,6 +248,21 @@ Invoke-RestMethod -Uri $url -Method POST -ContentType "application/json" -Header
 
 ---
 
+## Test-Script ausführen
+
+Im Projektordner (PowerShell):
+
+```powershell
+.\scripts\test-terminmarktplatz-webhook.ps1 -BaseUrl "https://readorning-abraham-nonpestilential.ngrok-free.dev" -ApiKey "DEIN_API_SCHLÜSSEL"
+```
+
+Ersetze die URL und den API-Schlüssel. Das Script prüft:
+1. Ping – ob WareVision erreichbar ist
+2. Health – ob der API-Schlüssel gültig ist
+3. Test-Buchung – legt einen Termin an
+
+---
+
 ## Häufiges Problem: ngrok blockiert Anfragen
 
 **Symptom:** Termine kommen nicht an, obwohl alles konfiguriert ist.

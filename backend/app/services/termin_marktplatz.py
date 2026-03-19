@@ -1,7 +1,7 @@
 """Terminmarktplatz-Integration: Webhook-Verarbeitung und Import-Logik."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -26,7 +26,7 @@ def _get_admin_user_id(db: Session) -> UUID | None:
 def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
     """
     Normalisiert Webhook-Payload von Terminmarktplatz oder ähnlichen Systemen.
-    Unterstützt verschiedene Feldnamen.
+    Unterstützt verschiedene Feldnamen (snake_case, camelCase, etc.).
     """
     def get(key: str, *alt_keys: str) -> Any:
         for k in [key, *alt_keys]:
@@ -35,15 +35,15 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
         return None
 
     return {
-        "external_booking_id": str(get("external_booking_id", "booking_id", "id", "uuid") or ""),
-        "starts_at": get("starts_at", "start_time", "start", "date_from"),
-        "ends_at": get("ends_at", "end_time", "end", "date_to"),
-        "customer_first_name": get("customer_first_name", "first_name", "vorname"),
-        "customer_last_name": get("customer_last_name", "last_name", "nachname"),
-        "customer_email": get("customer_email", "email"),
-        "customer_phone": get("customer_phone", "phone", "telefon"),
-        "vehicle_license_plate": get("vehicle_license_plate", "license_plate", "kennzeichen"),
-        "vehicle_vin": get("vehicle_vin", "vin"),
+        "external_booking_id": str(get("external_booking_id", "externalBookingId", "booking_id", "bookingId", "id", "uuid") or ""),
+        "starts_at": get("starts_at", "startsAt", "start_time", "startTime", "start", "date_from", "dateFrom"),
+        "ends_at": get("ends_at", "endsAt", "end_time", "endTime", "end", "date_to", "dateTo"),
+        "customer_first_name": get("customer_first_name", "customerFirstName", "first_name", "firstName", "vorname"),
+        "customer_last_name": get("customer_last_name", "customerLastName", "last_name", "lastName", "nachname"),
+        "customer_email": get("customer_email", "customerEmail", "email"),
+        "customer_phone": get("customer_phone", "customerPhone", "phone", "telefon"),
+        "vehicle_license_plate": get("vehicle_license_plate", "vehicleLicensePlate", "license_plate", "licensePlate", "kennzeichen"),
+        "vehicle_vin": get("vehicle_vin", "vehicleVin", "vin"),
         "title": get("title", "subject"),
         "description": get("description", "notes", "bemerkung"),
         "action": get("action", "event"),  # booking, cancel, update
@@ -116,16 +116,31 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
         return existing
 
     # Neuen Termin anlegen
-    try:
-        starts_at = datetime.fromisoformat(
-            str(data["starts_at"]).replace("Z", "+00:00")
-        )
-        ends_at = datetime.fromisoformat(
-            str(data["ends_at"]).replace("Z", "+00:00")
-        )
-    except (ValueError, AttributeError, TypeError) as e:
-        logger.warning("Terminmarktplatz webhook: Datumsparsing fehlgeschlagen starts_at=%s ends_at=%s error=%s", data.get("starts_at"), data.get("ends_at"), e)
+    def parse_datetime(val: Any) -> datetime | None:
+        if val is None:
+            return None
+        s = str(val).strip()
+        if not s:
+            return None
+        s = s.replace("Z", "+00:00").replace("z", "+00:00")
+        # Leerzeichen statt T (z.B. "2025-03-20 10:00:00")
+        if " " in s and "T" not in s:
+            s = s.replace(" ", "T", 1)
+        try:
+            return datetime.fromisoformat(s)
+        except (ValueError, AttributeError, TypeError):
+            return None
+
+    starts_at = parse_datetime(data.get("starts_at"))
+    ends_at = parse_datetime(data.get("ends_at"))
+    if not starts_at or not ends_at:
+        logger.warning("Terminmarktplatz webhook: Datumsparsing fehlgeschlagen starts_at=%s ends_at=%s", data.get("starts_at"), data.get("ends_at"))
         return None
+    # Naive Datetimes als lokale Zeit (Europe/Berlin) interpretieren
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+    if ends_at.tzinfo is None:
+        ends_at = ends_at.replace(tzinfo=timezone.utc)
 
     if starts_at >= ends_at:
         logger.warning("Terminmarktplatz webhook: ends_at muss nach starts_at liegen")
