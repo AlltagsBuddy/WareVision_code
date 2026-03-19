@@ -75,6 +75,16 @@ def _get_api_key(db: Session) -> str | None:
     return row.value if row and row.value else None
 
 
+@router.get("/termin-marktplatz-api-key")
+def get_termin_marktplatz_api_key(
+    db: Annotated[Session, Depends(get_db)],
+    _=Depends(require_admin),
+) -> dict:
+    """API-Schlüssel anzeigen (Admin only)."""
+    key = _get_api_key(db)
+    return {"api_key": key if key else None}
+
+
 @router.patch("", response_model=AppSettingsOut)
 def update_settings(
     payload: AppSettingsUpdate,

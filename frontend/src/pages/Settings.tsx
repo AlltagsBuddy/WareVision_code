@@ -291,13 +291,32 @@ export default function Settings() {
         </p>
         <div className="form-group">
           <label htmlFor="termin_marktplatz_api_key">API-Schlüssel</label>
-          <input
-            id="termin_marktplatz_api_key"
-            type="password"
-            value={form.termin_marktplatz_api_key}
-            onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_api_key: e.target.value }))}
-            placeholder="Geheimer Schlüssel für Webhook-Authentifizierung"
-          />
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              id="termin_marktplatz_api_key"
+              type="password"
+              value={form.termin_marktplatz_api_key}
+              onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_api_key: e.target.value }))}
+              placeholder="Geheimer Schlüssel für Webhook-Authentifizierung"
+              style={{ flex: 1, minWidth: 200 }}
+            />
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                settingsApi.getTerminMarktplatzApiKey().then((r) => {
+                  if (r.api_key) {
+                    navigator.clipboard.writeText(r.api_key)
+                    alert(`API-Schlüssel kopiert: ${r.api_key}`)
+                  } else {
+                    alert('Noch kein API-Schlüssel hinterlegt. Bitte oben eintragen und speichern.')
+                  }
+                }).catch(() => alert('Fehler beim Laden'))
+              }}
+            >
+              Anzeigen &amp; kopieren
+            </button>
+          </div>
         </div>
         {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--color-bg-secondary)', borderRadius: 6, fontSize: '0.85rem' }}>

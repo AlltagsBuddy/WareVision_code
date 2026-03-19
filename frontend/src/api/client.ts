@@ -107,6 +107,8 @@ export const settingsApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  getTerminMarktplatzApiKey: () =>
+    api<{ api_key: string | null }>('/settings/termin-marktplatz-api-key'),
 }
 
 export const auditApi = {
