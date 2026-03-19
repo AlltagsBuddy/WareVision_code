@@ -7,6 +7,7 @@ class AppSettingsOut(BaseModel):
     """Company settings for invoices and documents."""
 
     termin_marktplatz_configured: bool = False  # True wenn API-Key gesetzt (ohne Wert zu exponieren)
+    termin_marktplatz_webhook_base_url: str = ""  # Optional: Basis-URL für Webhook (z.B. ngrok-URL)
     company_name: str = ""
     company_address: str = ""
     company_vat_id: str = ""
@@ -45,3 +46,4 @@ class AppSettingsUpdate(BaseModel):
     smtp_from: str | None = None
     smtp_tls: str | None = None
     termin_marktplatz_api_key: str | None = None
+    termin_marktplatz_webhook_base_url: str | None = None

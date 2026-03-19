@@ -30,6 +30,7 @@ _SETTING_KEYS = (
     "smtp_from",
     "smtp_tls",
     "termin_marktplatz_api_key",
+    "termin_marktplatz_webhook_base_url",
 )
 
 
@@ -50,6 +51,7 @@ def get_settings(
     api_key = d.get("termin_marktplatz_api_key", "")
     return AppSettingsOut(
         termin_marktplatz_configured=bool(api_key and api_key.strip()),
+        termin_marktplatz_webhook_base_url=d.get("termin_marktplatz_webhook_base_url", ""),
         company_name=d.get("company_name", ""),
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),
@@ -110,6 +112,7 @@ def update_settings(
     api_key = d.get("termin_marktplatz_api_key", "")
     return AppSettingsOut(
         termin_marktplatz_configured=bool(api_key and api_key.strip()),
+        termin_marktplatz_webhook_base_url=d.get("termin_marktplatz_webhook_base_url", ""),
         company_name=d.get("company_name", ""),
         company_address=d.get("company_address", ""),
         company_vat_id=d.get("company_vat_id", ""),

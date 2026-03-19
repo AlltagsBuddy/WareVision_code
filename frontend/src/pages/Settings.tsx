@@ -24,6 +24,7 @@ export default function Settings() {
     smtp_from: '',
     smtp_tls: 'true',
     termin_marktplatz_api_key: '',
+    termin_marktplatz_webhook_base_url: '',
   })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -53,6 +54,7 @@ export default function Settings() {
           smtp_from: data.smtp_from || '',
           smtp_tls: data.smtp_tls || 'true',
           termin_marktplatz_api_key: '',
+          termin_marktplatz_webhook_base_url: data.termin_marktplatz_webhook_base_url || '',
         })
       })
       .catch(() => setError('Einstellungen konnten nicht geladen werden.'))
@@ -83,6 +85,7 @@ export default function Settings() {
         smtp_from: form.smtp_from,
         smtp_tls: form.smtp_tls,
         termin_marktplatz_api_key: form.termin_marktplatz_api_key,
+        termin_marktplatz_webhook_base_url: form.termin_marktplatz_webhook_base_url || undefined,
       })
       setSuccess(true)
     } catch (err) {
@@ -318,11 +321,24 @@ export default function Settings() {
             </button>
           </div>
         </div>
+        <div className="form-group" style={{ marginTop: '0.75rem' }}>
+          <label htmlFor="termin_marktplatz_webhook_base_url">Webhook-Basis-URL (optional)</label>
+          <input
+            id="termin_marktplatz_webhook_base_url"
+            type="text"
+            value={form.termin_marktplatz_webhook_base_url}
+            onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_webhook_base_url: e.target.value }))}
+            placeholder="z.B. https://abc123.ngrok-free.dev (leer = aktuelle Adresse)"
+          />
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+            Wenn WareVision über ngrok oder eine andere URL erreichbar ist, hier eintragen. Die Webhook-URL wird daraus gebildet.
+          </p>
+        </div>
         {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--color-bg-secondary)', borderRadius: 6, fontSize: '0.85rem' }}>
             <strong>Webhook-URL für Terminmarktplatz:</strong>
             <code style={{ display: 'block', marginTop: '0.5rem', wordBreak: 'break-all' }}>
-              {typeof window !== 'undefined' ? `${window.location.origin}/api/v1/appointments/webhook/termin-marktplatz` : ''}
+              {typeof window !== 'undefined' ? `${(form.termin_marktplatz_webhook_base_url || window.location.origin).replace(/\/$/, '')}/api/v1/appointments/webhook/termin-marktplatz` : ''}
             </code>
             <p style={{ margin: '0.5rem 0 0 0', color: 'var(--color-text-muted)' }}>
               Diese URL in Terminmarktplatz hinterlegen. Header: <code>X-API-Key: [dein Schlüssel]</code>

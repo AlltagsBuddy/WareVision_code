@@ -102,6 +102,7 @@ export const settingsApi = {
     smtp_from?: string
     smtp_tls?: string
     termin_marktplatz_api_key?: string
+    termin_marktplatz_webhook_base_url?: string
   }) =>
     api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
       method: 'PATCH',
