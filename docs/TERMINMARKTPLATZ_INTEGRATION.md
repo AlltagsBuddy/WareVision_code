@@ -85,7 +85,10 @@ Diese Werte trägt der Anbieter in seinem Terminmarktplatz-Profil ein (oder du l
 ```
 Content-Type: application/json
 X-API-Key: <webhook_api_key>
+ngrok-skip-browser-warning: 1
 ```
+
+**Hinweis:** `ngrok-skip-browser-warning: 1` ist bei ngrok-URLs erforderlich, sonst blockiert ngrok die Anfrage.
 
 **Alternativ** statt `X-API-Key`:
 ```

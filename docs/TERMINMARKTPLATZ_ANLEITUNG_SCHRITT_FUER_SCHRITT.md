@@ -106,6 +106,7 @@ Wenn WareVision nur auf `localhost` läuft, kann Terminmarktplatz (auf einem and
 | **URL** | Die gespeicherte `webhook_url` |
 | **Header 1** | `Content-Type: application/json` |
 | **Header 2** | `X-API-Key: <webhook_api_key>` (z.B. `X-API-Key: tm-wv-secret-12345`) |
+| **Header 3** | `ngrok-skip-browser-warning: 1` **(wichtig bei ngrok-URLs – sonst blockiert ngrok die Anfrage)** |
 | **Body** | JSON (siehe unten) |
 
 **JSON-Body (Beispiel):**
@@ -244,3 +245,22 @@ Invoke-RestMethod -Uri $url -Method POST -ContentType "application/json" -Header
 - [ ] Schritt C1: Health-Check erfolgreich
 - [ ] Schritt C2: Test-Buchung senden
 - [ ] Schritt C3: Termin erscheint im Terminplaner
+
+---
+
+## Häufiges Problem: ngrok blockiert Anfragen
+
+**Symptom:** Termine kommen nicht an, obwohl alles konfiguriert ist.
+
+**Ursache:** Bei ngrok-URLs blockiert ngrok Anfragen ohne speziellen Header.
+
+**Lösung:** Im Terminmarktplatz beim Webhook-Aufruf diesen Header mitsenden:
+
+```
+ngrok-skip-browser-warning: 1
+```
+
+**Alle drei Header müssen gesetzt sein:**
+1. `Content-Type: application/json`
+2. `X-API-Key: <dein API-Schlüssel>`
+3. `ngrok-skip-browser-warning: 1`
