@@ -178,8 +178,10 @@ Wenn ein Termin **in WareVision** storniert wird, der von Terminmarktplatz stamm
 |-------------|------|
 | **Methode** | `POST` |
 | **URL** | Die konfigurierte Storno-Callback-URL |
-| **Header** | `Content-Type: application/json` |
+| **Header** | `Content-Type: application/json`, `X-API-Key: <webhook_api_key>` |
 | **Body** | Siehe unten |
+
+Der `X-API-Key` enthält den API-Schlüssel des jeweiligen Providers (derselbe wie bei Webhook-Anfragen von Terminmarktplatz an WareVision).
 
 **JSON-Body:**
 

@@ -235,10 +235,12 @@ def notify_termin_marktplatz_cancel(
     callback_url: str,
     external_booking_id: str,
     reason: str | None = None,
+    api_key: str | None = None,
 ) -> bool:
     """
     Benachrichtigt Terminmarktplatz über eine Stornierung in WareVision.
     Terminmarktplatz kann daraufhin die Stornierungsmail an den Kunden senden.
+    api_key: webhook_api_key des Providers (X-API-Key Header).
     Returns True bei Erfolg, False bei Fehler.
     """
     if not callback_url or not callback_url.strip():
@@ -255,14 +257,16 @@ def notify_termin_marktplatz_cancel(
     if reason and reason.strip():
         payload["cancel_reason"] = reason.strip()
 
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key and api_key.strip():
+        headers["X-API-Key"] = api_key.strip()
+
     try:
         data = json.dumps(payload).encode("utf-8")
         req = Request(
             url,
             data=data,
-            headers={
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             method="POST",
         )
         with urlopen(req, timeout=15) as resp:

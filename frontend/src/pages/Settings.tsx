@@ -347,7 +347,7 @@ export default function Settings() {
             placeholder="z.B. https://api.terminmarktplatz.de/v1/bookings/cancel"
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
-            URL von Terminmarktplatz, an die WareVision Stornierungen meldet. Der Kunde erhält dann die Stornierungsmail von Terminmarktplatz.
+            URL von Terminmarktplatz, an die WareVision Stornierungen meldet. Der API-Schlüssel wird im Header X-API-Key mitgesendet. Der Kunde erhält dann die Stornierungsmail von Terminmarktplatz.
           </p>
         </div>
         {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (

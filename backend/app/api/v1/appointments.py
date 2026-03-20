@@ -414,10 +414,14 @@ def delete_appointment(
         from app.services.termin_marktplatz import notify_termin_marktplatz_cancel
         from app.services.audit import log_audit
 
-        row = db.query(AppSetting).filter(
+        callback_row = db.query(AppSetting).filter(
             AppSetting.key == "termin_marktplatz_cancel_callback_url"
         ).first()
-        callback_url = (row.value or "").strip() if row else ""
+        api_key_row = db.query(AppSetting).filter(
+            AppSetting.key == "termin_marktplatz_api_key"
+        ).first()
+        callback_url = (callback_row.value or "").strip() if callback_row else ""
+        api_key = (api_key_row.value or "").strip() if api_key_row else ""
         cancel_reason = (reason or "").strip() or None
 
         if callback_url:
@@ -425,6 +429,7 @@ def delete_appointment(
                 callback_url=callback_url,
                 external_booking_id=apt.external_booking_id,
                 reason=cancel_reason,
+                api_key=api_key or None,
             )
             log_audit(
                 db,
