@@ -43,6 +43,7 @@ export default function Appointments() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
+  const [editingAppointment, setEditingAppointment] = useState<any | null>(null)
   const [importForm, setImportForm] = useState({
     external_booking_id: '',
     date: '',
@@ -99,6 +100,14 @@ export default function Appointments() {
       setFormVehicles([])
     }
   }, [form.customer_id])
+
+  useEffect(() => {
+    if (editingAppointment?.customer_id) {
+      vehiclesApi.list({ customer_id: editingAppointment.customer_id }).then(setFormVehicles)
+    } else {
+      setFormVehicles([])
+    }
+  }, [editingAppointment?.customer_id])
 
   const getCustomerName = (customerId: string | null) => {
     if (!customerId) return '–'
@@ -228,10 +237,82 @@ export default function Appointments() {
     if (!confirm('Termin wirklich stornieren?')) return
     try {
       await appointmentsApi.delete(id)
-      setAppointments((prev) => prev.filter((a) => a.id !== id))
+      const updated = await appointmentsApi.list({
+        from_date: fromDate.toISOString(),
+        to_date: toDate.toISOString(),
+      })
+      setAppointments(updated)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
+  }
+
+  const handleEditClick = (a: any) => {
+    const start = new Date(a.starts_at)
+    const end = new Date(a.ends_at)
+    setEditingAppointment({
+      ...a,
+      date: a.starts_at.slice(0, 10),
+      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+      customer_id: a.customer_id || '',
+      vehicle_id: a.vehicle_id || '',
+      appointment_type: a.appointment_type,
+      title: a.title || '',
+      description: a.description || '',
+    })
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingAppointment) return
+    setError('')
+    const [sh, sm] = editingAppointment.startTime.split(':').map(Number)
+    const [eh, em] = editingAppointment.endTime.split(':').map(Number)
+    const startsAt = new Date(editingAppointment.date)
+    startsAt.setHours(sh, sm, 0, 0)
+    const endsAt = new Date(editingAppointment.date)
+    endsAt.setHours(eh, em, 0, 0)
+    if (startsAt >= endsAt) {
+      setError('Ende muss nach Beginn liegen.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await appointmentsApi.update(editingAppointment.id, {
+        customer_id: editingAppointment.customer_id || null,
+        vehicle_id: editingAppointment.vehicle_id || null,
+        appointment_type: editingAppointment.appointment_type,
+        title: editingAppointment.title || undefined,
+        description: editingAppointment.description || undefined,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+      })
+      setEditingAppointment(null)
+      const updated = await appointmentsApi.list({
+        from_date: fromDate.toISOString(),
+        to_date: toDate.toISOString(),
+      })
+      setAppointments(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fehler beim Speichern')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const getDisplayName = (a: any) => {
+    if (a.customer_first_name || a.customer_last_name) {
+      return `${a.customer_first_name || ''} ${a.customer_last_name || ''}`.trim()
+    }
+    return getCustomerName(a.customer_id)
+  }
+
+  const getTooltipText = (a: any) => {
+    const parts: string[] = [getDisplayName(a), a.title || TYPE_LABELS[a.appointment_type]]
+    if (a.customer_email) parts.push(`E-Mail: ${a.customer_email}`)
+    if (a.customer_phone) parts.push(`Tel: ${a.customer_phone}`)
+    return parts.join(' · ')
   }
 
   const appointmentsByDay = weekDates.reduce<Record<string, any[]>>((acc, d) => {
@@ -388,6 +469,121 @@ export default function Appointments() {
         </div>
       )}
 
+      {editingAppointment && (
+        <div className="modal-overlay" onClick={() => setEditingAppointment(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Termin bearbeiten</h2>
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="edit-apt-type">Typ *</label>
+                  <select
+                    id="edit-apt-type"
+                    value={editingAppointment.appointment_type}
+                    onChange={(e) => setEditingAppointment({ ...editingAppointment, appointment_type: e.target.value })}
+                    required
+                  >
+                    <option value="workshop">Werkstatt</option>
+                    <option value="test_drive">Probefahrt</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-apt-date">Datum *</label>
+                  <input
+                    id="edit-apt-date"
+                    type="date"
+                    value={editingAppointment.date}
+                    onChange={(e) => setEditingAppointment({ ...editingAppointment, date: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="edit-apt-start">Von *</label>
+                  <input
+                    id="edit-apt-start"
+                    type="time"
+                    value={editingAppointment.startTime}
+                    onChange={(e) => setEditingAppointment({ ...editingAppointment, startTime: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-apt-end">Bis *</label>
+                  <input
+                    id="edit-apt-end"
+                    type="time"
+                    value={editingAppointment.endTime}
+                    onChange={(e) => setEditingAppointment({ ...editingAppointment, endTime: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-apt-customer">Kunde</label>
+                <select
+                  id="edit-apt-customer"
+                  value={editingAppointment.customer_id}
+                  onChange={(e) => setEditingAppointment({ ...editingAppointment, customer_id: e.target.value, vehicle_id: '' })}
+                >
+                  <option value="">– Optional –</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || c.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-apt-vehicle">Fahrzeug</label>
+                <select
+                  id="edit-apt-vehicle"
+                  value={editingAppointment.vehicle_id}
+                  onChange={(e) => setEditingAppointment({ ...editingAppointment, vehicle_id: e.target.value })}
+                  disabled={!editingAppointment.customer_id}
+                >
+                  <option value="">– Optional –</option>
+                  {formVehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.license_plate || v.vin || 'Fahrzeug'} {v.build_year ? `(${v.build_year})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-apt-title">Titel</label>
+                <input
+                  id="edit-apt-title"
+                  type="text"
+                  value={editingAppointment.title}
+                  onChange={(e) => setEditingAppointment({ ...editingAppointment, title: e.target.value })}
+                  placeholder="z.B. Ölwechsel"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-apt-desc">Beschreibung</label>
+                <textarea
+                  id="edit-apt-desc"
+                  value={editingAppointment.description}
+                  onChange={(e) => setEditingAppointment({ ...editingAppointment, description: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              {error && <p className="error">{error}</p>}
+              <div className="form-actions">
+                <button type="button" onClick={() => setEditingAppointment(null)} className="btn-secondary">
+                  Abbrechen
+                </button>
+                <button type="submit" disabled={submitting} className="btn-primary">
+                  {submitting ? 'Wird gespeichert...' : 'Speichern'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showImportForm && (
         <div className="modal-overlay" onClick={() => setShowImportForm(false)}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
@@ -532,7 +728,7 @@ export default function Appointments() {
             ))}
           </div>
           <div className="calendar-body">
-            {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map((hour) => (
+            {[6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].map((hour) => (
               <div key={hour} className="calendar-row">
                 <div className="calendar-cell calendar-time">
                   {hour}:00
@@ -550,7 +746,7 @@ export default function Appointments() {
               return apts.map((a) => {
                 const start = new Date(a.starts_at)
                 const end = new Date(a.ends_at)
-                const top = (start.getHours() - 8 + start.getMinutes() / 60) * 50
+                const top = (start.getHours() - 6 + start.getMinutes() / 60) * 50
                 const height = ((end.getTime() - start.getTime()) / (60 * 60 * 1000)) * 50
                 const dayIndex = weekDates.indexOf(d)
                 return (
@@ -563,23 +759,37 @@ export default function Appointments() {
                       top: `${top + 40}px`,
                       height: `${Math.max(height - 2, 24)}px`,
                     }}
-                    title={`${getCustomerName(a.customer_id)} – ${a.title || TYPE_LABELS[a.appointment_type]}`}
+                    title={getTooltipText(a)}
                   >
                     <span className="calendar-apt-title">{a.title || TYPE_LABELS[a.appointment_type]}</span>
                     <span className="calendar-apt-time">
                       {formatTime(a.starts_at)}–{formatTime(a.ends_at)}
                     </span>
-                    {a.customer_id && (
-                      <span className="calendar-apt-customer">{getCustomerName(a.customer_id)}</span>
+                    {(getDisplayName(a) !== '–' || a.customer_email || a.customer_phone) && (
+                      <span className="calendar-apt-customer">
+                        {getDisplayName(a) !== '–' && getDisplayName(a)}
+                        {a.customer_email && (getDisplayName(a) !== '–' ? ' · ' : '') + a.customer_email}
+                        {a.customer_phone && (a.customer_email || getDisplayName(a) !== '–' ? ' · ' : '') + a.customer_phone}
+                      </span>
                     )}
-                    <button
-                      type="button"
-                      className="calendar-apt-cancel"
-                      onClick={() => handleCancel(a.id)}
-                      title="Stornieren"
-                    >
-                      ×
-                    </button>
+                    <div className="calendar-apt-actions">
+                      <button
+                        type="button"
+                        className="calendar-apt-edit"
+                        onClick={(e) => { e.stopPropagation(); handleEditClick(a) }}
+                        title="Bearbeiten"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        className="calendar-apt-cancel"
+                        onClick={(e) => { e.stopPropagation(); handleCancel(a.id) }}
+                        title="Stornieren"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 )
               })

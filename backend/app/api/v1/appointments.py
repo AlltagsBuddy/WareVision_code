@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
@@ -24,6 +24,27 @@ from app.schemas.appointment import (
 )
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
+
+
+def _to_appointment_read(apt: Appointment) -> AppointmentRead:
+    """Build AppointmentRead from Appointment (customer must be loaded for customer_* fields)."""
+    return AppointmentRead(
+        id=apt.id,
+        customer_id=apt.customer_id,
+        vehicle_id=apt.vehicle_id,
+        appointment_type=apt.appointment_type,
+        source=apt.source,
+        status=apt.status,
+        title=apt.title,
+        description=apt.description,
+        starts_at=apt.starts_at,
+        ends_at=apt.ends_at,
+        created_at=apt.created_at,
+        customer_first_name=apt.customer.first_name if apt.customer else None,
+        customer_last_name=apt.customer.last_name if apt.customer else None,
+        customer_email=apt.customer.email if apt.customer else None,
+        customer_phone=apt.customer.phone if apt.customer else None,
+    )
 
 
 def _check_overlap(db: Session, starts_at: datetime, ends_at: datetime, exclude_id: UUID | None = None) -> bool:
@@ -52,7 +73,7 @@ def list_appointments(
     limit: int = Query(100, ge=1, le=200),
 ) -> list[Appointment]:
     """List appointments, optionally filtered by date range."""
-    query = db.query(Appointment)
+    query = db.query(Appointment).options(joinedload(Appointment.customer))
     if from_date:
         query = query.filter(Appointment.ends_at >= from_date)
     if to_date:
@@ -61,7 +82,8 @@ def list_appointments(
         query = query.filter(Appointment.customer_id == customer_id)
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
-    return query.order_by(Appointment.starts_at.asc()).offset(skip).limit(limit).all()
+    appointments = query.order_by(Appointment.starts_at.asc()).offset(skip).limit(limit).all()
+    return [_to_appointment_read(apt) for apt in appointments]
 
 
 @router.post("", response_model=AppointmentRead, status_code=status.HTTP_201_CREATED)
@@ -297,15 +319,20 @@ def get_appointment(
     appointment_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> Appointment:
+) -> AppointmentRead:
     """Get appointment by ID."""
-    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    apt = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.customer))
+        .filter(Appointment.id == appointment_id)
+        .first()
+    )
     if not apt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Termin nicht gefunden",
         )
-    return apt
+    return _to_appointment_read(apt)
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentRead)
@@ -338,6 +365,8 @@ def update_appointment(
         apt.customer_id = payload.customer_id
     if payload.vehicle_id is not None:
         apt.vehicle_id = payload.vehicle_id
+    if payload.appointment_type is not None:
+        apt.appointment_type = payload.appointment_type
     if payload.status is not None:
         apt.status = payload.status
     if payload.title is not None:
@@ -350,7 +379,13 @@ def update_appointment(
         apt.ends_at = payload.ends_at
     db.commit()
     db.refresh(apt)
-    return apt
+    apt = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.customer))
+        .filter(Appointment.id == apt.id)
+        .first()
+    )
+    return _to_appointment_read(apt)
 
 
 @router.delete("/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)

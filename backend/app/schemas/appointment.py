@@ -24,6 +24,7 @@ class AppointmentUpdate(BaseModel):
 
     customer_id: Optional[UUID] = None
     vehicle_id: Optional[UUID] = None
+    appointment_type: Optional[str] = Field(None, pattern="^(workshop|test_drive)$")
     status: Optional[str] = Field(None, pattern="^(planned|confirmed|rescheduled|cancelled|completed)$")
     title: Optional[str] = None
     description: Optional[str] = None
@@ -61,6 +62,11 @@ class AppointmentRead(BaseModel):
     starts_at: datetime
     ends_at: datetime
     created_at: datetime
+    # Kundendaten (z.B. von Terminmarktplatz) für Anzeige
+    customer_first_name: Optional[str] = None
+    customer_last_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
 
     class Config:
         from_attributes = True
