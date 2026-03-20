@@ -85,7 +85,7 @@ export default function Appointments() {
         from_date: fromDate.toISOString(),
         to_date: toDate.toISOString(),
       }),
-      customersApi.list(),
+      customersApi.list({ limit: 100 }),
     ])
       .then(([apts, custs]) => {
         setAppointments(apts)
@@ -322,7 +322,7 @@ export default function Appointments() {
   const getCustomerEmail = (customerId: string | null, fallback: { customer_email?: string } | null) => {
     if (customerId) {
       const c = customers.find((x) => x.id === customerId)
-      return c?.email || ''
+      if (c?.email) return c.email
     }
     return fallback?.customer_email || ''
   }
@@ -330,7 +330,7 @@ export default function Appointments() {
   const getCustomerPhone = (customerId: string | null, fallback: { customer_phone?: string } | null) => {
     if (customerId) {
       const c = customers.find((x) => x.id === customerId)
-      return c?.phone || ''
+      if (c?.phone) return c.phone
     }
     return fallback?.customer_phone || ''
   }
