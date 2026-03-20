@@ -64,10 +64,16 @@ export default function BarcodeScanner({ open, onScan, onClose }: BarcodeScanner
         await scannerRef.current.stop()
         scannerRef.current = null
       }
-      // Sichtbarer Container (id) statt display:none – für zuverlässige Bildverarbeitung
-      // useBarCodeDetectorIfSupported: true für bessere EAN/QR-Erkennung in Bildern
-      const scanner = new Html5Qrcode(id, { useBarCodeDetectorIfSupported: true, verbose: false })
-      const decodedText = await scanner.scanFile(file, true)
+      // Sichtbarer Container (id) – display:none führt zu fehlenden Dimensionen
+      const tryScan = (useBarCodeDetector: boolean) =>
+        new Html5Qrcode(id, { useBarCodeDetectorIfSupported: useBarCodeDetector, verbose: false })
+          .scanFile(file, true)
+      let decodedText: string
+      try {
+        decodedText = await tryScan(true)  // Native API – oft besser für EAN
+      } catch {
+        decodedText = await tryScan(false) // Fallback: ZXing
+      }
       onScan(decodedText)
       onClose()
     } catch (err) {
