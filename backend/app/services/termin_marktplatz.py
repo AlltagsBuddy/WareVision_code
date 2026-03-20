@@ -253,9 +253,8 @@ def notify_termin_marktplatz_cancel(
     payload: dict[str, Any] = {
         "external_booking_id": external_booking_id,
         "action": "cancel",
+        "cancel_reason": (reason or "").strip(),
     }
-    if reason and reason.strip():
-        payload["cancel_reason"] = reason.strip()
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key and api_key.strip():

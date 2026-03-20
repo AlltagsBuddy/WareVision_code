@@ -197,9 +197,9 @@ Der `X-API-Key` enthält den API-Schlüssel des jeweiligen Providers (derselbe w
 |------|-----|--------------|
 | `external_booking_id` | string | Eindeutige Buchungs-ID (Pflicht) |
 | `action` | string | Immer `"cancel"` |
-| `cancel_reason` | string | Optional: Stornierungsgrund (vom Benutzer in WareVision eingegeben) |
+| `cancel_reason` | string | Stornierungsgrund (vom Benutzer in WareVision eingegeben, kann leer sein) |
 
-Terminmarktplatz sollte mit `200 OK` antworten und die Stornierungsmail an den Kunden versenden (ggf. mit `cancel_reason` in der E-Mail).
+Terminmarktplatz sollte mit `200 OK` antworten und die Stornierungsmail an den Kunden versenden. **Der Stornierungsgrund (`cancel_reason`) muss in der E-Mail an den Kunden enthalten sein.**
 
 ---
 
