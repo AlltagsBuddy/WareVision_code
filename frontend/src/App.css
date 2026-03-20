@@ -361,6 +361,12 @@
   border-color: var(--color-accent);
 }
 
+.form-group input.readonly {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
 .error {
   color: #f87171;
   font-size: 0.9rem;

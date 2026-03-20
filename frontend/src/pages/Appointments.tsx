@@ -319,6 +319,22 @@ export default function Appointments() {
     return getCustomerName(a.customer_id)
   }
 
+  const getCustomerEmail = (customerId: string | null, fallback: { customer_email?: string } | null) => {
+    if (customerId) {
+      const c = customers.find((x) => x.id === customerId)
+      return c?.email || ''
+    }
+    return fallback?.customer_email || ''
+  }
+
+  const getCustomerPhone = (customerId: string | null, fallback: { customer_phone?: string } | null) => {
+    if (customerId) {
+      const c = customers.find((x) => x.id === customerId)
+      return c?.phone || ''
+    }
+    return fallback?.customer_phone || ''
+  }
+
   const getTooltipText = (a: any) => {
     const parts: string[] = [getDisplayName(a), a.title || TYPE_LABELS[a.appointment_type]]
     if (a.customer_email) parts.push(`E-Mail: ${a.customer_email}`)
@@ -447,6 +463,30 @@ export default function Appointments() {
                   ))}
                 </select>
               </div>
+              {form.customer_id && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="apt-email">E-Mail</label>
+                    <input
+                      id="apt-email"
+                      type="email"
+                      value={getCustomerEmail(form.customer_id, null)}
+                      readOnly
+                      className="readonly"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="apt-phone">Telefon</label>
+                    <input
+                      id="apt-phone"
+                      type="text"
+                      value={getCustomerPhone(form.customer_id, null)}
+                      readOnly
+                      className="readonly"
+                    />
+                  </div>
+                </div>
+              )}
               <div className="form-group">
                 <label htmlFor="apt-title">Titel</label>
                 <input
@@ -562,6 +602,30 @@ export default function Appointments() {
                   ))}
                 </select>
               </div>
+              {(editingAppointment.customer_id || editingAppointment.customer_email || editingAppointment.customer_phone) && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="edit-apt-email">E-Mail</label>
+                    <input
+                      id="edit-apt-email"
+                      type="email"
+                      value={getCustomerEmail(editingAppointment.customer_id, editingAppointment)}
+                      readOnly
+                      className="readonly"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="edit-apt-phone">Telefon</label>
+                    <input
+                      id="edit-apt-phone"
+                      type="text"
+                      value={getCustomerPhone(editingAppointment.customer_id, editingAppointment)}
+                      readOnly
+                      className="readonly"
+                    />
+                  </div>
+                </div>
+              )}
               <div className="form-group">
                 <label htmlFor="edit-apt-title">Titel</label>
                 <input
