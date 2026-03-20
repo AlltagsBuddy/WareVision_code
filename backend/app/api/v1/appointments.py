@@ -393,8 +393,9 @@ def delete_appointment(
     appointment_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+    reason: str | None = Query(None, description="Stornierungsgrund (für Terminmarktplatz-Benachrichtigung)"),
 ) -> None:
-    """Delete (cancel) appointment."""
+    """Delete (cancel) appointment. Optional reason for Terminmarktplatz notifications."""
     apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not apt:
         raise HTTPException(
@@ -403,3 +404,49 @@ def delete_appointment(
         )
     apt.status = "cancelled"
     db.commit()
+
+    # Bei Terminmarktplatz-Terminen: Callback aufrufen, damit Kunde Stornierungsmail erhält
+    if (
+        apt.source == "termin_marktplatz"
+        and apt.external_booking_id
+    ):
+        from app.models.app_setting import AppSetting
+        from app.services.termin_marktplatz import notify_termin_marktplatz_cancel
+        from app.services.audit import log_audit
+
+        row = db.query(AppSetting).filter(
+            AppSetting.key == "termin_marktplatz_cancel_callback_url"
+        ).first()
+        callback_url = (row.value or "").strip() if row else ""
+        cancel_reason = (reason or "").strip() or None
+
+        if callback_url:
+            ok = notify_termin_marktplatz_cancel(
+                callback_url=callback_url,
+                external_booking_id=apt.external_booking_id,
+                reason=cancel_reason,
+            )
+            log_audit(
+                db,
+                user_id=current_user.id,
+                entity_type="appointment",
+                entity_id=apt.id,
+                action="termin_marktplatz_cancel_notify",
+                new_values={
+                    "external_booking_id": apt.external_booking_id,
+                    "success": ok,
+                    "reason": cancel_reason,
+                },
+            )
+        else:
+            log_audit(
+                db,
+                user_id=current_user.id,
+                entity_type="appointment",
+                entity_id=apt.id,
+                action="termin_marktplatz_cancel_skip",
+                new_values={
+                    "external_booking_id": apt.external_booking_id,
+                    "hint": "Storno-Callback-URL nicht konfiguriert",
+                },
+            )

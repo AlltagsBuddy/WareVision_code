@@ -166,6 +166,41 @@ WareVision setzt den Termin mit dieser `external_booking_id` auf `status: cancel
 
 ---
 
+### Schritt 2.5b: WareVision → Terminmarktplatz (Storno-Benachrichtigung)
+
+Wenn ein Termin **in WareVision** storniert wird, der von Terminmarktplatz stammt, benachrichtigt WareVision Terminmarktplatz (falls konfiguriert). Terminmarktplatz kann daraufhin die Stornierungsmail an den Kunden senden.
+
+**Konfiguration in WareVision:** Einstellungen → Terminmarktplatz → **Storno-Callback-URL** eintragen (z.B. `https://api.terminmarktplatz.de/v1/bookings/cancel`).
+
+**Request von WareVision an Terminmarktplatz:**
+
+| Eigenschaft | Wert |
+|-------------|------|
+| **Methode** | `POST` |
+| **URL** | Die konfigurierte Storno-Callback-URL |
+| **Header** | `Content-Type: application/json` |
+| **Body** | Siehe unten |
+
+**JSON-Body:**
+
+```json
+{
+  "external_booking_id": "tm-<gleiche-buchungs-id>",
+  "action": "cancel",
+  "cancel_reason": "Kapazitätsengpass"
+}
+```
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `external_booking_id` | string | Eindeutige Buchungs-ID (Pflicht) |
+| `action` | string | Immer `"cancel"` |
+| `cancel_reason` | string | Optional: Stornierungsgrund (vom Benutzer in WareVision eingegeben) |
+
+Terminmarktplatz sollte mit `200 OK` antworten und die Stornierungsmail an den Kunden versenden (ggf. mit `cancel_reason` in der E-Mail).
+
+---
+
 ### Schritt 2.6: JSON-Body – Terminänderung
 
 ```json

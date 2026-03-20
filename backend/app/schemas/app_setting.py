@@ -8,6 +8,7 @@ class AppSettingsOut(BaseModel):
 
     termin_marktplatz_configured: bool = False  # True wenn API-Key gesetzt (ohne Wert zu exponieren)
     termin_marktplatz_webhook_base_url: str = ""  # Optional: Basis-URL für Webhook (z.B. ngrok-URL)
+    termin_marktplatz_cancel_callback_url: str = ""  # URL für Storno-Benachrichtigung (WareVision → Terminmarktplatz)
     company_name: str = ""
     company_address: str = ""
     company_vat_id: str = ""
@@ -47,3 +48,4 @@ class AppSettingsUpdate(BaseModel):
     smtp_tls: str | None = None
     termin_marktplatz_api_key: str | None = None
     termin_marktplatz_webhook_base_url: str | None = None
+    termin_marktplatz_cancel_callback_url: str | None = None

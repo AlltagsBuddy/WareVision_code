@@ -103,6 +103,7 @@ export const settingsApi = {
     smtp_tls?: string
     termin_marktplatz_api_key?: string
     termin_marktplatz_webhook_base_url?: string
+    termin_marktplatz_cancel_callback_url?: string
   }) =>
     api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
       method: 'PATCH',
@@ -269,8 +270,12 @@ export const appointmentsApi = {
   get: (id: string) => api<any>(`/appointments/${id}`),
   update: (id: string, data: Record<string, unknown>) =>
     api<any>(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: (id: string) =>
-    api<void>(`/appointments/${id}`, { method: 'DELETE' }),
+  delete: (id: string, params?: { reason?: string }) => {
+    const p = new URLSearchParams()
+    if (params?.reason != null && params.reason !== '') p.set('reason', params.reason)
+    const qs = p.toString()
+    return api<void>(`/appointments/${id}${qs ? `?${qs}` : ''}`, { method: 'DELETE' })
+  },
 }
 
 export const documentsApi = {

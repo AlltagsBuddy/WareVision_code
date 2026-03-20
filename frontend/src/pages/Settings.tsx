@@ -25,6 +25,7 @@ export default function Settings() {
     smtp_tls: 'true',
     termin_marktplatz_api_key: '',
     termin_marktplatz_webhook_base_url: '',
+    termin_marktplatz_cancel_callback_url: '',
   })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -55,6 +56,7 @@ export default function Settings() {
           smtp_tls: data.smtp_tls || 'true',
           termin_marktplatz_api_key: '',
           termin_marktplatz_webhook_base_url: data.termin_marktplatz_webhook_base_url || '',
+          termin_marktplatz_cancel_callback_url: data.termin_marktplatz_cancel_callback_url || '',
         })
       })
       .catch(() => setError('Einstellungen konnten nicht geladen werden.'))
@@ -86,6 +88,7 @@ export default function Settings() {
         smtp_tls: form.smtp_tls,
         termin_marktplatz_api_key: form.termin_marktplatz_api_key,
         termin_marktplatz_webhook_base_url: form.termin_marktplatz_webhook_base_url || undefined,
+        termin_marktplatz_cancel_callback_url: form.termin_marktplatz_cancel_callback_url || undefined,
       })
       setSuccess(true)
     } catch (err) {
@@ -332,6 +335,19 @@ export default function Settings() {
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
             Wenn WareVision über ngrok oder eine andere URL erreichbar ist, hier eintragen. Die Webhook-URL wird daraus gebildet.
+          </p>
+        </div>
+        <div className="form-group" style={{ marginTop: '0.75rem' }}>
+          <label htmlFor="termin_marktplatz_cancel_callback_url">Storno-Callback-URL</label>
+          <input
+            id="termin_marktplatz_cancel_callback_url"
+            type="url"
+            value={form.termin_marktplatz_cancel_callback_url}
+            onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_cancel_callback_url: e.target.value }))}
+            placeholder="z.B. https://api.terminmarktplatz.de/v1/bookings/cancel"
+          />
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+            URL von Terminmarktplatz, an die WareVision Stornierungen meldet. Der Kunde erhält dann die Stornierungsmail von Terminmarktplatz.
           </p>
         </div>
         {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (

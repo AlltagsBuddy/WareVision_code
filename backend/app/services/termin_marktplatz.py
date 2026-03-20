@@ -2,6 +2,9 @@
 
 import logging
 from datetime import datetime, timezone
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+import json
 from typing import Any
 from uuid import UUID
 
@@ -226,3 +229,67 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
     log_audit(db, user_id=None, entity_type="appointment", entity_id=apt.id, action="webhook_termin_marktplatz_import", new_values={"external_booking_id": external_id, "title": apt.title})
     logger.info("Terminmarktplatz: Termin importiert external_id=%s id=%s", external_id, apt.id)
     return apt
+
+
+def notify_termin_marktplatz_cancel(
+    callback_url: str,
+    external_booking_id: str,
+    reason: str | None = None,
+) -> bool:
+    """
+    Benachrichtigt Terminmarktplatz über eine Stornierung in WareVision.
+    Terminmarktplatz kann daraufhin die Stornierungsmail an den Kunden senden.
+    Returns True bei Erfolg, False bei Fehler.
+    """
+    if not callback_url or not callback_url.strip():
+        return False
+    url = callback_url.strip()
+    if not external_booking_id:
+        logger.warning("Terminmarktplatz cancel callback: external_booking_id fehlt")
+        return False
+
+    payload: dict[str, Any] = {
+        "external_booking_id": external_booking_id,
+        "action": "cancel",
+    }
+    if reason and reason.strip():
+        payload["cancel_reason"] = reason.strip()
+
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urlopen(req, timeout=15) as resp:
+            if 200 <= resp.status < 300:
+                logger.info(
+                    "Terminmarktplatz cancel callback erfolgreich: external_id=%s",
+                    external_booking_id,
+                )
+                return True
+            logger.warning(
+                "Terminmarktplatz cancel callback: Status %s für external_id=%s",
+                resp.status,
+                external_booking_id,
+            )
+            return False
+    except HTTPError as e:
+        logger.warning(
+            "Terminmarktplatz cancel callback HTTP-Fehler: %s %s für external_id=%s",
+            e.code,
+            e.reason,
+            external_booking_id,
+        )
+        return False
+    except (URLError, OSError, TimeoutError) as e:
+        logger.warning(
+            "Terminmarktplatz cancel callback Verbindungsfehler: %s für external_id=%s",
+            e,
+            external_booking_id,
+        )
+        return False

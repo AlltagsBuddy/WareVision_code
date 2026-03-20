@@ -44,6 +44,8 @@ export default function Appointments() {
   const [showForm, setShowForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<any | null>(null)
+  const [cancellingAppointment, setCancellingAppointment] = useState<any | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
   const [importForm, setImportForm] = useState({
     external_booking_id: '',
     date: '',
@@ -233,10 +235,19 @@ export default function Appointments() {
     }
   }
 
-  const handleCancel = async (id: string) => {
-    if (!confirm('Termin wirklich stornieren?')) return
+  const handleCancelClick = (a: any) => {
+    setCancellingAppointment(a)
+    setCancelReason('')
+  }
+
+  const handleCancelConfirm = async () => {
+    if (!cancellingAppointment) return
     try {
-      await appointmentsApi.delete(id)
+      await appointmentsApi.delete(cancellingAppointment.id, {
+        reason: cancelReason.trim() || undefined,
+      })
+      setCancellingAppointment(null)
+      setCancelReason('')
       const updated = await appointmentsApi.list({
         from_date: fromDate.toISOString(),
         to_date: toDate.toISOString(),
@@ -584,6 +595,41 @@ export default function Appointments() {
         </div>
       )}
 
+      {cancellingAppointment && (
+        <div className="modal-overlay" onClick={() => setCancellingAppointment(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Termin stornieren</h2>
+            <p>
+              Termin wirklich stornieren?
+              {cancellingAppointment.source === 'termin_marktplatz' && (
+                <span style={{ display: 'block', marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+                  Der Kunde erhält eine Stornierungsmail von Terminmarktplatz. Optional können Sie einen Grund angeben:
+                </span>
+              )}
+            </p>
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label htmlFor="cancel-reason">Stornierungsgrund (optional)</label>
+              <textarea
+                id="cancel-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="z.B. Kapazitätsengpass, Kundentermin verschoben"
+                rows={3}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setCancellingAppointment(null)} className="btn-secondary">
+                Abbrechen
+              </button>
+              <button type="button" onClick={handleCancelConfirm} className="btn-primary">
+                Stornieren
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showImportForm && (
         <div className="modal-overlay" onClick={() => setShowImportForm(false)}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
@@ -784,7 +830,7 @@ export default function Appointments() {
                       <button
                         type="button"
                         className="calendar-apt-cancel"
-                        onClick={(e) => { e.stopPropagation(); handleCancel(a.id) }}
+                        onClick={(e) => { e.stopPropagation(); handleCancelClick(a) }}
                         title="Stornieren"
                       >
                         ×

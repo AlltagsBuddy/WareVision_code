@@ -15,6 +15,8 @@ const ACTION_LABELS: Record<string, string> = {
   webhook_termin_marktplatz_cancel: 'Terminmarktplatz: Storno',
   webhook_termin_marktplatz_update: 'Terminmarktplatz: Update',
   webhook_termin_marktplatz_error: 'Terminmarktplatz: Fehler',
+  termin_marktplatz_cancel_notify: 'Terminmarktplatz: Storno-Benachrichtigung',
+  termin_marktplatz_cancel_skip: 'Terminmarktplatz: Storno (ohne Callback)',
 }
 
 const ENTITY_LABELS: Record<string, string> = {
