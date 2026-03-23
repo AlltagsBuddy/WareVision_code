@@ -63,7 +63,16 @@ Wenn WareVision nur auf `localhost` läuft, kann Terminmarktplatz (auf einem and
 
 ---
 
-### Schritt A4: Webhook-URL kopieren
+### Schritt A4: Webhook-Basis-URL eintragen (wichtig!)
+
+| Wo | Was |
+|----|-----|
+| **Ort** | Einstellungsseite, Bereich Terminmarktplatz |
+| **Feld** | „Webhook-Basis-URL“ |
+| **Eingeben** | Die öffentliche URL (ngrok oder Domain), z.B. `https://abc123.ngrok-free.dev` |
+| **Wichtig** | Ohne diese URL erreichen Buchungen aus Terminmarktplatz WareVision nicht – localhost ist von außen nicht erreichbar |
+
+### Schritt A5: Webhook-URL kopieren
 
 | Wo | Was |
 |----|-----|
@@ -86,7 +95,7 @@ Wenn WareVision nur auf `localhost` läuft, kann Terminmarktplatz (auf einem and
 
 | Feld | Wert (Beispiel) | Woher |
 |------|-----------------|-------|
-| `webhook_url` | `https://abc123.ngrok-free.dev/api/v1/appointments/webhook/termin-marktplatz` | Aus Schritt A4 |
+| `webhook_url` | `https://abc123.ngrok-free.dev/api/v1/appointments/webhook/termin-marktplatz` | Aus Schritt A5 |
 | `webhook_api_key` | `tm-wv-secret-12345` | Aus Schritt A3 |
 
 ---
@@ -226,13 +235,29 @@ Invoke-RestMethod -Uri $url -Method POST -ContentType "application/json" -Header
 
 ---
 
+---
+
+## Fehlersuche: Buchungen kommen nicht im Terminplaner an
+
+| Prüfpunkt | Lösung |
+|-----------|--------|
+| **Webhook-Basis-URL leer oder localhost?** | In Einstellungen → Terminmarktplatz die **öffentliche URL** (ngrok oder Domain) eintragen und speichern |
+| **ngrok läuft nicht?** | `ngrok http 5173` in einem separaten Fenster starten und offen lassen |
+| **API-Schlüssel falsch?** | In beiden Systemen exakt denselben Schlüssel verwenden |
+| **Test-Script ausführen** | `.\scripts\test-terminmarktplatz-webhook.ps1 -BaseUrl "https://DEINE-ngrok-URL" -ApiKey "DEIN-SCHLÜSSEL"` – wenn der Test funktioniert, erscheint der Termin im Planer |
+| **Audit-Log prüfen** | WareVision → Audit-Log → Filter „Terminmarktplatz“ – bei Fehlern erscheinen Details |
+| **Header bei ngrok** | Terminmarktplatz muss `ngrok-skip-browser-warning: 1` mitsenden |
+
+---
+
 ## Kurz-Checkliste
 
 **WareVision:**
 - [ ] Schritt A1: WareVision gestartet
 - [ ] Schritt A2: ngrok oder öffentliche URL aktiv
 - [ ] Schritt A3: API-Schlüssel in Einstellungen hinterlegt
-- [ ] Schritt A4: Webhook-URL notiert
+- [ ] Schritt A4: Webhook-Basis-URL mit ngrok/Domain eingetragen (nicht localhost!)
+- [ ] Schritt A5: Webhook-URL notiert
 
 **Terminmarktplatz:**
 - [ ] Schritt B1: `webhook_url` und `webhook_api_key` pro Anbieter gespeichert

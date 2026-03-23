@@ -60,12 +60,12 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
     - action=cancel: Termin stornieren
     - action=update: Termin aktualisieren (falls unterstützt)
     """
-    # Payload kann in "data" oder "booking" gewrappt sein
+    # Payload kann in "data", "booking", "reservation" oder "appointment" gewrappt sein
     raw = payload
-    if isinstance(payload.get("data"), dict):
-        raw = payload["data"]
-    elif isinstance(payload.get("booking"), dict):
-        raw = payload["booking"]
+    for wrapper in ("data", "booking", "reservation", "appointment"):
+        if isinstance(payload.get(wrapper), dict):
+            raw = payload[wrapper]
+            break
 
     logger.info("Terminmarktplatz webhook received: external_id=%s", raw.get("external_booking_id") or raw.get("booking_id") or raw.get("id"))
 
@@ -122,6 +122,15 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
     def parse_datetime(val: Any) -> datetime | None:
         if val is None:
             return None
+        # Unix-Zeitstempel (Sekunden oder Millisekunden)
+        if isinstance(val, (int, float)):
+            try:
+                ts = float(val)
+                if ts > 1e12:
+                    ts /= 1000
+                return datetime.fromtimestamp(ts, tz=timezone.utc)
+            except (ValueError, OSError, OverflowError):
+                return None
         s = str(val).strip()
         if not s:
             return None

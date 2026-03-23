@@ -325,16 +325,16 @@ export default function Settings() {
           </div>
         </div>
         <div className="form-group" style={{ marginTop: '0.75rem' }}>
-          <label htmlFor="termin_marktplatz_webhook_base_url">Webhook-Basis-URL (optional)</label>
+          <label htmlFor="termin_marktplatz_webhook_base_url">Webhook-Basis-URL *</label>
           <input
             id="termin_marktplatz_webhook_base_url"
             type="text"
             value={form.termin_marktplatz_webhook_base_url}
             onChange={(e) => setForm((f) => ({ ...f, termin_marktplatz_webhook_base_url: e.target.value }))}
-            placeholder="z.B. https://abc123.ngrok-free.dev (leer = aktuelle Adresse)"
+            placeholder="z.B. https://abc123.ngrok-free.dev"
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
-            Wenn WareVision über ngrok oder eine andere URL erreichbar ist, hier eintragen. Die Webhook-URL wird daraus gebildet.
+            Öffentliche URL von WareVision (ngrok oder Domain). <strong>Ohne diese URL kann Terminmarktplatz keine Buchungen senden</strong> – localhost ist von außen nicht erreichbar.
           </p>
         </div>
         <div className="form-group" style={{ marginTop: '0.75rem' }}>
@@ -357,8 +357,13 @@ export default function Settings() {
               {typeof window !== 'undefined' ? `${(form.termin_marktplatz_webhook_base_url || window.location.origin).replace(/\/$/, '')}/api/v1/appointments/webhook/termin-marktplatz` : ''}
             </code>
             <p style={{ margin: '0.5rem 0 0 0', color: 'var(--color-text-muted)' }}>
-              Diese URL in Terminmarktplatz hinterlegen. Header: <code>X-API-Key: [dein Schlüssel]</code>
+              Diese URL in Terminmarktplatz hinterlegen. Header: <code>X-API-Key: [dein Schlüssel]</code> und bei ngrok: <code>ngrok-skip-browser-warning: 1</code>
             </p>
+            {typeof window !== 'undefined' && (!form.termin_marktplatz_webhook_base_url || /localhost|127\.0\.0\.1/i.test(form.termin_marktplatz_webhook_base_url || window.location.origin)) && (
+              <p style={{ margin: '0.5rem 0 0 0', color: 'var(--color-accent)', fontWeight: 500 }}>
+                Hinweis: localhost/127.0.0.1 ist von Terminmarktplatz nicht erreichbar. Webhook-Basis-URL mit öffentlicher Adresse (z.B. ngrok) eintragen.
+              </p>
+            )}
           </div>
         )}
         {error && <p className="error">{error}</p>}
