@@ -239,6 +239,8 @@ Invoke-RestMethod -Uri $url -Method POST -ContentType "application/json" -Header
 
 ## Fehlersuche: Buchungen kommen nicht im Terminplaner an
 
+**Ausführliche Checkliste:** Siehe [TERMINMARKTPLATZ_FEHLERSUCHE.md](TERMINMARKTPLATZ_FEHLERSUCHE.md)
+
 | Prüfpunkt | Lösung |
 |-----------|--------|
 | **Webhook-Basis-URL leer oder localhost?** | In Einstellungen → Terminmarktplatz die **öffentliche URL** (ngrok oder Domain) eintragen und speichern |

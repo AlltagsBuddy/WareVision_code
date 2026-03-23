@@ -181,23 +181,33 @@ def termin_marktplatz_webhook(
     Kein Login erforderlich, Authentifizierung per X-API-Key oder Authorization: Bearer.
     Erwartetes JSON: external_booking_id, starts_at, ends_at (ISO), customer_*, vehicle_*, optional action (booking|cancel|update).
     """
+    import logging
+    log = logging.getLogger(__name__)
+    log.info("Terminmarktplatz webhook POST received, payload keys=%s", list(payload.keys()))
+
     from app.services.termin_marktplatz import process_webhook
     from app.services.audit import log_audit
 
     result = process_webhook(db, payload)
     if result is None:
-        ext_id = payload.get("external_booking_id") or payload.get("booking_id")
-        raw = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-        if not ext_id and isinstance(raw, dict):
-            ext_id = raw.get("external_booking_id") or raw.get("booking_id")
+        raw = payload
+        for w in ("data", "booking", "reservation", "appointment"):
+            if isinstance(payload.get(w), dict):
+                raw = payload[w]
+                break
+        ext_id = (
+            payload.get("external_booking_id") or payload.get("booking_id")
+            or (raw.get("external_booking_id") or raw.get("booking_id") if isinstance(raw, dict) else None)
+        )
         err_detail = {
             "error": "Ungültige oder unvollständige Buchungsdaten",
             "hint": "Pflichtfelder: external_booking_id, starts_at, ends_at (ISO 8601, z.B. 2025-03-20T10:00:00+01:00)",
-            "received_keys": list(payload.keys()),
-            "received_starts_at": payload.get("starts_at") or (raw.get("starts_at") if isinstance(raw, dict) else None),
-            "received_ends_at": payload.get("ends_at") or (raw.get("ends_at") if isinstance(raw, dict) else None),
+            "payload_keys": list(payload.keys()),
+            "data_keys": list(raw.keys()) if isinstance(raw, dict) else [],
+            "received_starts_at": (payload.get("starts_at") or (raw.get("starts_at") if isinstance(raw, dict) else None)),
+            "received_ends_at": (payload.get("ends_at") or (raw.get("ends_at") if isinstance(raw, dict) else None)),
         }
-        log_audit(db, user_id=None, entity_type="appointment", entity_id=None, action="webhook_termin_marktplatz_error", new_values={"error": err_detail["error"], "external_booking_id": str(ext_id) if ext_id else None, "payload_keys": list(payload.keys())})
+        log_audit(db, user_id=None, entity_type="appointment", entity_id=None, action="webhook_termin_marktplatz_error", new_values={"error": err_detail["error"], "external_booking_id": str(ext_id) if ext_id else None, "payload_keys": err_detail["payload_keys"], "data_keys": err_detail["data_keys"], "received_starts_at": err_detail["received_starts_at"], "received_ends_at": err_detail["received_ends_at"]})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=err_detail,

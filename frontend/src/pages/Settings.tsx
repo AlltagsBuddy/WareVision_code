@@ -334,7 +334,7 @@ export default function Settings() {
             placeholder="z.B. https://abc123.ngrok-free.dev"
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
-            Öffentliche URL von WareVision (ngrok oder Domain). <strong>Ohne diese URL kann Terminmarktplatz keine Buchungen senden</strong> – localhost ist von außen nicht erreichbar.
+            Nur Basis-URL ohne Pfad, z.B. <code>https://abc123.ngrok-free.dev</code>. <strong>Kein</strong> <code>/api/...</code> anhängen – das wird automatisch ergänzt.
           </p>
         </div>
         <div className="form-group" style={{ marginTop: '0.75rem' }}>
@@ -350,11 +350,22 @@ export default function Settings() {
             URL von Terminmarktplatz, an die WareVision Stornierungen meldet. Der API-Schlüssel wird im Header X-API-Key mitgesendet. Der Kunde erhält dann die Stornierungsmail von Terminmarktplatz.
           </p>
         </div>
-        {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (
+        {(form.termin_marktplatz_api_key || terminMarktplatzConfigured) && (() => {
+          const base = form.termin_marktplatz_webhook_base_url || (typeof window !== 'undefined' ? window.location.origin : '')
+          const origin = base ? (() => {
+            try {
+              const u = new URL(base)
+              return `${u.protocol}//${u.host}`
+            } catch {
+              return base.replace(/\/+$/, '')
+            }
+          })() : ''
+          const webhookUrl = origin ? `${origin}/api/v1/appointments/webhook/termin-marktplatz` : ''
+          return (
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--color-bg-secondary)', borderRadius: 6, fontSize: '0.85rem' }}>
             <strong>Webhook-URL für Terminmarktplatz:</strong>
             <code style={{ display: 'block', marginTop: '0.5rem', wordBreak: 'break-all' }}>
-              {typeof window !== 'undefined' ? `${(form.termin_marktplatz_webhook_base_url || window.location.origin).replace(/\/$/, '')}/api/v1/appointments/webhook/termin-marktplatz` : ''}
+              {webhookUrl || '(Webhook-Basis-URL eintragen)'}
             </code>
             <p style={{ margin: '0.5rem 0 0 0', color: 'var(--color-text-muted)' }}>
               Diese URL in Terminmarktplatz hinterlegen. Header: <code>X-API-Key: [dein Schlüssel]</code> und bei ngrok: <code>ngrok-skip-browser-warning: 1</code>
@@ -365,7 +376,8 @@ export default function Settings() {
               </p>
             )}
           </div>
-        )}
+          )
+        })()}
         {error && <p className="error">{error}</p>}
         {success && <p className="success">Einstellungen gespeichert.</p>}
         <button type="submit" className="btn btn-primary" disabled={submitting}>
