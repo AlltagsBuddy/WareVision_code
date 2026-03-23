@@ -32,6 +32,13 @@ class AppointmentUpdate(BaseModel):
     ends_at: Optional[datetime] = None
 
 
+class AppointmentCancelResponse(BaseModel):
+    """Response after cancelling an appointment."""
+
+    termin_marktplatz_notified: bool = False
+    termin_marktplatz_error: str | None = None
+
+
 class ExternalAppointmentImport(BaseModel):
     """Import appointment from external system (Termin-Marktplatz etc.)."""
 

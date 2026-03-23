@@ -243,7 +243,7 @@ export default function Appointments() {
   const handleCancelConfirm = async () => {
     if (!cancellingAppointment) return
     try {
-      await appointmentsApi.delete(cancellingAppointment.id, {
+      const res = await appointmentsApi.delete(cancellingAppointment.id, {
         reason: cancelReason.trim() || undefined,
       })
       setCancellingAppointment(null)
@@ -253,6 +253,14 @@ export default function Appointments() {
         to_date: toDate.toISOString(),
       })
       setAppointments(updated)
+      if (
+        cancellingAppointment.source === 'termin_marktplatz' &&
+        res &&
+        !res.termin_marktplatz_notified &&
+        res.termin_marktplatz_error
+      ) {
+        alert(`Termin storniert.\n\nHinweis: ${res.termin_marktplatz_error}`)
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
@@ -667,7 +675,7 @@ export default function Appointments() {
               Termin wirklich stornieren?
               {cancellingAppointment.source === 'termin_marktplatz' && (
                 <span style={{ display: 'block', marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
-                  Der Kunde erhält eine Stornierungsmail von Terminmarktplatz. Optional können Sie einen Grund angeben:
+                  Der Kunde erhält eine Stornierungsmail von Terminmarktplatz – sofern die Storno-Callback-URL in Einstellungen → Terminmarktplatz konfiguriert ist. Optional können Sie einen Grund angeben:
                 </span>
               )}
             </p>

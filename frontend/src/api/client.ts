@@ -274,7 +274,10 @@ export const appointmentsApi = {
     const p = new URLSearchParams()
     if (params?.reason != null && params.reason !== '') p.set('reason', params.reason)
     const qs = p.toString()
-    return api<void>(`/appointments/${id}${qs ? `?${qs}` : ''}`, { method: 'DELETE' })
+    return api<{ termin_marktplatz_notified?: boolean; termin_marktplatz_error?: string }>(
+      `/appointments/${id}${qs ? `?${qs}` : ''}`,
+      { method: 'DELETE' }
+    )
   },
 }
 

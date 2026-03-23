@@ -17,6 +17,7 @@ from app.models.manufacturer import Manufacturer
 from app.models.vehicle import Vehicle
 from app.models.user import User
 from app.schemas.appointment import (
+    AppointmentCancelResponse,
     AppointmentCreate,
     AppointmentRead,
     AppointmentUpdate,
@@ -388,13 +389,13 @@ def update_appointment(
     return _to_appointment_read(apt)
 
 
-@router.delete("/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{appointment_id}", response_model=AppointmentCancelResponse)
 def delete_appointment(
     appointment_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
     reason: str | None = Query(None, description="Stornierungsgrund (für Terminmarktplatz-Benachrichtigung)"),
-) -> None:
+) -> AppointmentCancelResponse:
     """Delete (cancel) appointment. Optional reason for Terminmarktplatz notifications."""
     apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not apt:
@@ -404,6 +405,8 @@ def delete_appointment(
         )
     apt.status = "cancelled"
     db.commit()
+
+    result = AppointmentCancelResponse()
 
     # Bei Terminmarktplatz-Terminen: Callback aufrufen, damit Kunde Stornierungsmail erhält
     if (
@@ -425,12 +428,14 @@ def delete_appointment(
         cancel_reason = (reason or "").strip() or None
 
         if callback_url:
-            ok = notify_termin_marktplatz_cancel(
+            ok, err_msg = notify_termin_marktplatz_cancel(
                 callback_url=callback_url,
                 external_booking_id=apt.external_booking_id,
                 reason=cancel_reason,
                 api_key=api_key or None,
             )
+            result.termin_marktplatz_notified = ok
+            result.termin_marktplatz_error = err_msg
             log_audit(
                 db,
                 user_id=current_user.id,
@@ -441,9 +446,11 @@ def delete_appointment(
                     "external_booking_id": apt.external_booking_id,
                     "success": ok,
                     "reason": cancel_reason,
+                    "error": err_msg,
                 },
             )
         else:
+            result.termin_marktplatz_error = "Storno-Callback-URL nicht konfiguriert. Bitte in Einstellungen → Terminmarktplatz eintragen."
             log_audit(
                 db,
                 user_id=current_user.id,
@@ -455,3 +462,5 @@ def delete_appointment(
                     "hint": "Storno-Callback-URL nicht konfiguriert",
                 },
             )
+
+    return result

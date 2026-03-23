@@ -170,7 +170,7 @@ WareVision setzt den Termin mit dieser `external_booking_id` auf `status: cancel
 
 Wenn ein Termin **in WareVision** storniert wird, der von Terminmarktplatz stammt, benachrichtigt WareVision Terminmarktplatz (falls konfiguriert). Terminmarktplatz kann daraufhin die Stornierungsmail an den Kunden senden.
 
-**Konfiguration in WareVision:** Einstellungen → Terminmarktplatz → **Storno-Callback-URL** eintragen (z.B. `https://api.terminmarktplatz.de/v1/bookings/cancel`).
+**Konfiguration in WareVision (wichtig!):** Einstellungen → Terminmarktplatz → **Storno-Callback-URL** eintragen (z.B. `https://api.terminmarktplatz.de/v1/bookings/cancel`). Ohne diese URL wird Terminmarktplatz bei Stornierungen in WareVision nicht benachrichtigt und der Kunde erhält keine Stornierungsmail.
 
 **Request von WareVision an Terminmarktplatz:**
 

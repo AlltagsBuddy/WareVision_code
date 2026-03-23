@@ -236,19 +236,19 @@ def notify_termin_marktplatz_cancel(
     external_booking_id: str,
     reason: str | None = None,
     api_key: str | None = None,
-) -> bool:
+) -> tuple[bool, str | None]:
     """
     Benachrichtigt Terminmarktplatz über eine Stornierung in WareVision.
     Terminmarktplatz kann daraufhin die Stornierungsmail an den Kunden senden.
     api_key: webhook_api_key des Providers (X-API-Key Header).
-    Returns True bei Erfolg, False bei Fehler.
+    Returns (success, error_message).
     """
     if not callback_url or not callback_url.strip():
-        return False
+        return False, "Storno-Callback-URL nicht konfiguriert. Bitte in Einstellungen → Terminmarktplatz eintragen."
     url = callback_url.strip()
     if not external_booking_id:
         logger.warning("Terminmarktplatz cancel callback: external_booking_id fehlt")
-        return False
+        return False, "Externe Buchungs-ID fehlt"
 
     payload: dict[str, Any] = {
         "external_booking_id": external_booking_id,
@@ -274,25 +274,27 @@ def notify_termin_marktplatz_cancel(
                     "Terminmarktplatz cancel callback erfolgreich: external_id=%s",
                     external_booking_id,
                 )
-                return True
+                return True, None
+            err_msg = f"Terminmarktplatz antwortete mit Status {resp.status}"
             logger.warning(
-                "Terminmarktplatz cancel callback: Status %s für external_id=%s",
-                resp.status,
+                "Terminmarktplatz cancel callback: %s für external_id=%s",
+                err_msg,
                 external_booking_id,
             )
-            return False
+            return False, err_msg
     except HTTPError as e:
+        err_msg = f"HTTP-Fehler {e.code}: {e.reason}"
         logger.warning(
-            "Terminmarktplatz cancel callback HTTP-Fehler: %s %s für external_id=%s",
-            e.code,
-            e.reason,
+            "Terminmarktplatz cancel callback %s für external_id=%s",
+            err_msg,
             external_booking_id,
         )
-        return False
+        return False, err_msg
     except (URLError, OSError, TimeoutError) as e:
+        err_msg = f"Verbindungsfehler: {e}"
         logger.warning(
-            "Terminmarktplatz cancel callback Verbindungsfehler: %s für external_id=%s",
-            e,
+            "Terminmarktplatz cancel callback %s für external_id=%s",
+            err_msg,
             external_booking_id,
         )
-        return False
+        return False, err_msg
