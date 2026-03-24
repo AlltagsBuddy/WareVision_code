@@ -19,11 +19,53 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 
 
+def _phone_from_webhook(val: Any) -> str | None:
+    """Telefon aus Webhook normalisieren (leer → None)."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+
 def _get_admin_user_id(db: Session) -> UUID | None:
     """Ersten Admin-User für created_by bei Webhook-Import."""
     from app.models.role import Role
     admin = db.query(User).join(Role, User.role_id == Role.id).filter(Role.name == "admin").first()
     return admin.id if admin else None
+
+
+def _merge_nested_customer(raw: dict[str, Any]) -> dict[str, Any]:
+    """Flacht verschachteltes customer-Objekt in die oberste Ebene (häufig bei Terminmarktplatz-APIs)."""
+    if not isinstance(raw, dict):
+        return raw
+    out = dict(raw)
+    nested = raw.get("customer")
+    if not isinstance(nested, dict):
+        return out
+    # Nur setzen, wenn auf oberster Ebene noch leer
+    def pick(*keys: str) -> Any:
+        for k in keys:
+            if k in nested and nested[k] is not None and str(nested[k]).strip() != "":
+                return nested[k]
+        return None
+
+    if not (out.get("customer_email") or out.get("email")):
+        v = pick("email", "customerEmail", "customer_email")
+        if v is not None:
+            out["customer_email"] = v
+    if not (out.get("customer_phone") or out.get("phone") or out.get("telefon")):
+        v = pick("phone", "telefon", "mobile", "mobilePhone", "phoneNumber", "telephone", "tel")
+        if v is not None:
+            out["customer_phone"] = v
+    if not out.get("customer_first_name"):
+        v = pick("first_name", "firstName", "vorname")
+        if v is not None:
+            out["customer_first_name"] = v
+    if not out.get("customer_last_name"):
+        v = pick("last_name", "lastName", "nachname")
+        if v is not None:
+            out["customer_last_name"] = v
+    return out
 
 
 def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -44,7 +86,18 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
         "customer_first_name": get("customer_first_name", "customerFirstName", "first_name", "firstName", "vorname"),
         "customer_last_name": get("customer_last_name", "customerLastName", "last_name", "lastName", "nachname"),
         "customer_email": get("customer_email", "customerEmail", "email"),
-        "customer_phone": get("customer_phone", "customerPhone", "phone", "telefon"),
+        "customer_phone": get(
+            "customer_phone",
+            "customerPhone",
+            "phone",
+            "telefon",
+            "mobile",
+            "mobilePhone",
+            "phoneNumber",
+            "telephone",
+            "tel",
+            "cellPhone",
+        ),
         "vehicle_license_plate": get("vehicle_license_plate", "vehicleLicensePlate", "license_plate", "licensePlate", "kennzeichen"),
         "vehicle_vin": get("vehicle_vin", "vehicleVin", "vin"),
         "title": get("title", "subject"),
@@ -69,6 +122,7 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
 
     logger.info("Terminmarktplatz webhook received: external_id=%s", raw.get("external_booking_id") or raw.get("booking_id") or raw.get("id"))
 
+    raw = _merge_nested_customer(raw)
     data = _normalize_webhook_payload(raw)
     external_id = data["external_booking_id"]
     if not external_id:
@@ -172,10 +226,14 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
                 first_name=data.get("customer_first_name") or "",
                 last_name=data.get("customer_last_name") or "",
                 email=data.get("customer_email") or None,
-                phone=data.get("customer_phone") or None,
+                phone=_phone_from_webhook(data.get("customer_phone")),
             )
             db.add(customer)
             db.flush()
+        else:
+            phone_new = _phone_from_webhook(data.get("customer_phone"))
+            if phone_new:
+                customer.phone = phone_new
         customer_id = customer.id
 
     vehicle_id = None

@@ -146,10 +146,12 @@ Authorization: Bearer <webhook_api_key>
 | `customer_first_name` | `first_name`, `vorname` |
 | `customer_last_name` | `last_name`, `nachname` |
 | `customer_email` | `email` |
-| `customer_phone` | `phone`, `telefon` |
+| `customer_phone` | `phone`, `telefon`, `mobile`, `mobilePhone`, `phoneNumber`, `telephone`, `tel`, `cellPhone` |
 | `vehicle_license_plate` | `license_plate`, `kennzeichen` |
 | `vehicle_vin` | `vin` |
 | `description` | `notes`, `bemerkung` |
+
+**Verschachteltes Objekt `customer`:** Statt flacher Felder kann ein Unterobjekt gesendet werden, z. B. `"customer": { "email": "…", "phone": "…", "firstName": "…" }` – WareVision übernimmt E-Mail und Telefon daraus.
 
 ---
 

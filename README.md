@@ -15,6 +15,8 @@
 docker compose up -d --build
 ```
 
+Falls der Build mit `failed to fetch oauth token` / `auth.docker.io` fehlschlägt: Die Dockerfiles nutzen `mirror.gcr.io` (Google-Spiegel der offiziellen Images). Erneut bauen; bei anhaltenden Netzproblemen VPN aus/an oder [lokale Entwicklung](#lokale-entwicklung) ohne vollständigen Image-Build nutzen.
+
 - **Frontend:** http://localhost:5173
 - **Backend API:** http://localhost:8000
 - **API-Dokumentation:** http://localhost:8000/docs

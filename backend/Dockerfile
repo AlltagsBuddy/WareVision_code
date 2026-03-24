@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+# mirror.gcr.io = gespiegelte Docker-Hub-Images (hilft bei Verbindungsproblemen zu auth.docker.io)
+FROM mirror.gcr.io/library/python:3.12-slim
 
 WORKDIR /app
 

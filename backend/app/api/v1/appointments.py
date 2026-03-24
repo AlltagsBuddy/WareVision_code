@@ -261,10 +261,14 @@ def import_external_appointment(
                 first_name=payload.customer_first_name or "",
                 last_name=payload.customer_last_name or "",
                 email=payload.customer_email or None,
-                phone=payload.customer_phone or None,
+                phone=(payload.customer_phone or "").strip() or None,
             )
             db.add(customer)
             db.flush()
+        else:
+            phone_new = (payload.customer_phone or "").strip()
+            if phone_new:
+                customer.phone = phone_new
         customer_id = customer.id
 
     vehicle_id = None
