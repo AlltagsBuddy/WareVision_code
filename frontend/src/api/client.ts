@@ -759,6 +759,29 @@ export const quotesApi = {
   },
 }
 
+export const stockCountsApi = {
+  list: () => api<any[]>('/stock-counts'),
+  get: (id: string) => api<any>(`/stock-counts/${id}`),
+  create: (data: { count_date: string; storage_location_id?: string; category_id?: string; notes?: string }) =>
+    api<any>('/stock-counts', { method: 'POST', body: JSON.stringify(data) }),
+  updateItem: (countId: string, itemId: string, data: { counted_qty: number | null; note?: string }) =>
+    api<any>(`/stock-counts/${countId}/items/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  complete: (id: string) => api<any>(`/stock-counts/${id}/complete`, { method: 'POST' }),
+  cancel: (id: string) => api<any>(`/stock-counts/${id}/cancel`, { method: 'POST' }),
+  getPdf: async (id: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/stock-counts/${id}/pdf`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!res.ok) throw new Error('PDF konnte nicht geladen werden')
+    return res.blob()
+  },
+  getCsv: async (id: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/stock-counts/${id}/csv`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!res.ok) throw new Error('CSV konnte nicht geladen werden')
+    return res.blob()
+  },
+}
+
 export const laborRatesApi = {
   list: () => api<any[]>('/labor-rates'),
   create: (data: { name: string; description?: string; rate_per_hour: number; is_default?: boolean }) =>

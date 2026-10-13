@@ -12,6 +12,7 @@ import Articles from './pages/Articles'
 import Stock from './pages/Stock'
 import WorkshopOrders from './pages/WorkshopOrders'
 import Quotes from './pages/Quotes'
+import StockCounts from './pages/StockCounts'
 import Appointments from './pages/Appointments'
 import Invoices from './pages/Invoices'
 import Documents from './pages/Documents'
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="articles" element={<Articles />} />
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="stock" element={<Stock />} />
+        <Route path="stock-counts" element={<StockCounts />} />
         <Route path="quotes" element={<Quotes />} />
         <Route path="workshop-orders" element={<WorkshopOrders />} />
         <Route path="appointments" element={<Appointments />} />

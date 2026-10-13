@@ -22,6 +22,7 @@ from app.models.app_setting import AppSetting
 from app.models.labor_rate import LaborRate
 from app.models.incoming_invoice import IncomingInvoice
 from app.models.quote import Quote, QuoteItem
+from app.models.stock_count import StockCount, StockCountItem
 
 __all__ = [
     "BaseModel",
@@ -52,4 +53,6 @@ __all__ = [
     "IncomingInvoice",
     "Quote",
     "QuoteItem",
+    "StockCount",
+    "StockCountItem",
 ]

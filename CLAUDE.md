@@ -80,6 +80,7 @@ WareVision_code/
 | Audit-Log | ✅ | ✅ |
 | Einstellungen | ✅ | ✅ |
 | Angebote / Kostenvoranschläge | ✅ | ✅ |
+| Inventur (Blindzählung, Differenzbuchung, Inventurliste PDF/CSV) | ✅ | ✅ |
 | E-Rechnung: ZUGFeRD-Ausgang (EN16931, PDF/A-3) | ✅ | ✅ |
 | E-Rechnung: Eingang (ZUGFeRD + XRechnung UBL/CII, GoBD-Archiv) | ✅ | ✅ |
 

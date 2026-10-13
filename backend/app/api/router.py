@@ -26,6 +26,7 @@ from app.api.v1 import (
     tasks,
     labor_rates,
     quotes,
+    stock_counts,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -53,3 +54,4 @@ api_router.include_router(audit.router)
 api_router.include_router(tasks.router)
 api_router.include_router(labor_rates.router)
 api_router.include_router(quotes.router)
+api_router.include_router(stock_counts.router)
