@@ -15,14 +15,28 @@ from app.services.ocr import extract_text_from_file
 from app.services.audit import log_audit
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.user import User
 from app.schemas.document import DocumentRead, DocumentAssign
+from app.models.customer import Customer
+from app.models.vehicle import Vehicle
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def _doc_to_read(doc: Document) -> DocumentRead:
+    """Document-ORM in Schema übersetzen und OCR-Namen befüllen."""
+    data = DocumentRead.model_validate(doc)
+    if doc.ocr_customer:
+        c = doc.ocr_customer
+        data.ocr_customer_name = c.company_name or f"{c.first_name or ''} {c.last_name or ''}".strip() or str(c.id)
+    if doc.ocr_vehicle:
+        v = doc.ocr_vehicle
+        data.ocr_vehicle_label = v.license_plate or v.vin or str(v.id)
+    return data
 
 ALLOWED_TYPES = {
     "application/pdf",
@@ -57,7 +71,8 @@ def list_documents(
         query = query.filter(Document.customer_id == customer_id)
     if vehicle_id:
         query = query.filter(Document.vehicle_id == vehicle_id)
-    return query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+    docs = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+    return [_doc_to_read(d) for d in docs]
 
 
 @router.post("", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
@@ -118,12 +133,20 @@ async def upload_document(
         extracted = extract_text_from_file(str(file_path), content_type)
         if extracted:
             doc.extracted_text = extracted[:50000]
+            db.flush()
+            # OCR-Matching: Kunde und Fahrzeug automatisch erkennen
+            from app.services.ocr_matching import match_document_entities
+            ocr_customer, ocr_vehicle = match_document_entities(db, extracted)
+            if ocr_customer:
+                doc.ocr_customer_id = ocr_customer.id
+            if ocr_vehicle:
+                doc.ocr_vehicle_id = ocr_vehicle.id
             db.commit()
             db.refresh(doc)
     except Exception:
         pass
 
-    return doc
+    return _doc_to_read(doc)
 
 
 @router.get("/{document_id}", response_model=DocumentRead)
@@ -136,7 +159,7 @@ def get_document(
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
-    return doc
+    return _doc_to_read(doc)
 
 
 @router.get("/{document_id}/download")
@@ -173,6 +196,12 @@ def extract_document_text(
     try:
         extracted = extract_text_from_file(doc.file_path, doc.content_type)
         doc.extracted_text = (extracted[:50000] if extracted else None)
+        db.flush()
+        if extracted:
+            from app.services.ocr_matching import match_document_entities
+            ocr_customer, ocr_vehicle = match_document_entities(db, extracted)
+            doc.ocr_customer_id = ocr_customer.id if ocr_customer else None
+            doc.ocr_vehicle_id = ocr_vehicle.id if ocr_vehicle else None
         db.commit()
         db.refresh(doc)
     except Exception as e:
@@ -180,7 +209,7 @@ def extract_document_text(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Textextraktion fehlgeschlagen: {str(e)}",
         )
-    return doc
+    return _doc_to_read(doc)
 
 
 @router.patch("/{document_id}", response_model=DocumentRead)
@@ -200,7 +229,7 @@ def update_document(
         doc.vehicle_id = payload.vehicle_id
     db.commit()
     db.refresh(doc)
-    return doc
+    return _doc_to_read(doc)
 
 
 @router.post("/{document_id}/send-email")
@@ -271,12 +300,25 @@ Mit freundlichen Grüßen
 def delete_document(
     document_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> None:
-    """Delete document and file."""
+    """Dokument und Datei löschen (nur Admin). Wird im Audit-Log protokolliert."""
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
+    log_audit(
+        db,
+        user_id=current_user.id,
+        entity_type="document",
+        entity_id=doc.id,
+        action="delete",
+        new_values={
+            "original_filename": doc.filename,
+            "file_path": doc.file_path,
+            "customer_id": str(doc.customer_id) if doc.customer_id else None,
+            "vehicle_id": str(doc.vehicle_id) if doc.vehicle_id else None,
+        },
+    )
     if os.path.exists(doc.file_path):
         try:
             os.remove(doc.file_path)

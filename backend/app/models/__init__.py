@@ -17,7 +17,11 @@ from app.models.maintenance_plan import MaintenancePlan, MaintenanceTask
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.document import Document
 from app.models.audit_log import AuditLog
+from app.models.storage_location import StorageLocation
 from app.models.app_setting import AppSetting
+from app.models.labor_rate import LaborRate
+from app.models.incoming_invoice import IncomingInvoice
+from app.models.quote import Quote, QuoteItem
 
 __all__ = [
     "BaseModel",
@@ -42,5 +46,10 @@ __all__ = [
     "InvoiceItem",
     "Document",
     "AuditLog",
+    "StorageLocation",
     "AppSetting",
+    "LaborRate",
+    "IncomingInvoice",
+    "Quote",
+    "QuoteItem",
 ]

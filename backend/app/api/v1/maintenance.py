@@ -1,21 +1,33 @@
 """Maintenance plans API."""
 
+import os
+import uuid
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.models.document import Document
 from app.models.maintenance_plan import MaintenancePlan, MaintenanceTask
+from app.models.vehicle import Vehicle
 from app.models.user import User
 from app.schemas.maintenance import (
     MaintenancePlanCreate,
     MaintenancePlanRead,
+    MaintenancePlanUpdate,
     MaintenanceTaskCreate,
     MaintenanceTaskRead,
+    MaintenanceTaskUpdate,
 )
+
+ALLOWED_DOCUMENT_TYPES = {"application/pdf", "image/jpeg", "image/png"}
+MAX_DOCUMENT_SIZE = 20 * 1024 * 1024  # 20 MB
 
 router = APIRouter(prefix="/maintenance-plans", tags=["maintenance-plans"])
 
@@ -28,22 +40,62 @@ def list_maintenance_plans(
     vehicle_model_id: UUID | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-) -> list[MaintenancePlan]:
+) -> list[MaintenancePlanRead]:
     """List maintenance plans."""
     query = db.query(MaintenancePlan)
     if manufacturer_id:
         query = query.filter(MaintenancePlan.manufacturer_id == manufacturer_id)
     if vehicle_model_id:
         query = query.filter(MaintenancePlan.vehicle_model_id == vehicle_model_id)
-    return query.order_by(MaintenancePlan.name).offset(skip).limit(limit).all()
+    plans = query.order_by(MaintenancePlan.name).offset(skip).limit(limit).all()
+    return [MaintenancePlanRead.from_orm_with_document(p) for p in plans]
+
+
+@router.get("/for-vehicle/{vehicle_id}", response_model=MaintenancePlanRead | None)
+def get_plan_for_vehicle(
+    vehicle_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MaintenancePlanRead | None:
+    """Passenden Wartungsplan für ein Fahrzeug suchen (nach Hersteller + Modell, Fallback nur Hersteller)."""
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        return None
+
+    # 1. Exakter Treffer: Hersteller + Modell
+    if vehicle.vehicle_model_id:
+        plan = (
+            db.query(MaintenancePlan)
+            .filter(
+                MaintenancePlan.manufacturer_id == vehicle.manufacturer_id,
+                MaintenancePlan.vehicle_model_id == vehicle.vehicle_model_id,
+            )
+            .first()
+        )
+        if plan:
+            return MaintenancePlanRead.from_orm_with_document(plan)
+
+    # 2. Fallback: nur Hersteller (kein spezifisches Modell)
+    plan = (
+        db.query(MaintenancePlan)
+        .filter(
+            MaintenancePlan.manufacturer_id == vehicle.manufacturer_id,
+            MaintenancePlan.vehicle_model_id.is_(None),
+        )
+        .first()
+    )
+    if plan:
+        return MaintenancePlanRead.from_orm_with_document(plan)
+
+    return None
 
 
 @router.post("", response_model=MaintenancePlanRead, status_code=status.HTTP_201_CREATED)
 def create_maintenance_plan(
     payload: MaintenancePlanCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> MaintenancePlan:
+    current_user: Annotated[User, Depends(require_admin)],
+) -> MaintenancePlanRead:
     """Create maintenance plan."""
     plan = MaintenancePlan(
         manufacturer_id=payload.manufacturer_id,
@@ -57,7 +109,7 @@ def create_maintenance_plan(
     db.add(plan)
     db.commit()
     db.refresh(plan)
-    return plan
+    return MaintenancePlanRead.from_orm_with_document(plan)
 
 
 @router.get("/{plan_id}", response_model=MaintenancePlanRead)
@@ -65,7 +117,7 @@ def get_maintenance_plan(
     plan_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> MaintenancePlan:
+) -> MaintenancePlanRead:
     """Get maintenance plan by ID."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
     if not plan:
@@ -73,14 +125,43 @@ def get_maintenance_plan(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Wartungsplan nicht gefunden",
         )
-    return plan
+    return MaintenancePlanRead.from_orm_with_document(plan)
+
+
+@router.patch("/{plan_id}", response_model=MaintenancePlanRead)
+def update_maintenance_plan(
+    plan_id: UUID,
+    payload: MaintenancePlanUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> MaintenancePlanRead:
+    """Wartungsplan aktualisieren."""
+    plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Wartungsplan nicht gefunden",
+        )
+    if payload.name is not None:
+        plan.name = payload.name
+    if payload.description is not None:
+        plan.description = payload.description
+    if payload.interval_km is not None:
+        plan.interval_km = payload.interval_km
+    if payload.interval_hours is not None:
+        plan.interval_hours = payload.interval_hours
+    if payload.interval_months is not None:
+        plan.interval_months = payload.interval_months
+    db.commit()
+    db.refresh(plan)
+    return MaintenancePlanRead.from_orm_with_document(plan)
 
 
 @router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_maintenance_plan(
     plan_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> None:
     """Delete maintenance plan."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
@@ -93,12 +174,21 @@ def delete_maintenance_plan(
     db.commit()
 
 
+def _task_to_read(task: MaintenanceTask) -> MaintenanceTaskRead:
+    """Task in Schema umwandeln und Artikelname befüllen."""
+    obj = MaintenanceTaskRead.model_validate(task)
+    if task.article:
+        obj.article_name = task.article.name
+        obj.article_number = task.article.article_number
+    return obj
+
+
 @router.get("/{plan_id}/tasks", response_model=list[MaintenanceTaskRead])
 def list_maintenance_tasks(
     plan_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> list[MaintenanceTask]:
+) -> list[MaintenanceTaskRead]:
     """List tasks of a maintenance plan."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
     if not plan:
@@ -106,7 +196,7 @@ def list_maintenance_tasks(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Wartungsplan nicht gefunden",
         )
-    return list(sorted(plan.tasks, key=lambda t: t.sort_order))
+    return [_task_to_read(t) for t in sorted(plan.tasks, key=lambda t: t.sort_order)]
 
 
 @router.post("/{plan_id}/tasks", response_model=MaintenanceTaskRead, status_code=status.HTTP_201_CREATED)
@@ -114,7 +204,7 @@ def create_maintenance_task(
     plan_id: UUID,
     payload: MaintenanceTaskCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> MaintenanceTask:
     """Add task to maintenance plan."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
@@ -128,11 +218,57 @@ def create_maintenance_task(
         name=payload.name,
         description=payload.description,
         sort_order=payload.sort_order,
+        article_id=payload.article_id,
+        quantity=payload.quantity,
+        unit=payload.unit,
     )
     db.add(task)
     db.commit()
     db.refresh(task)
-    return task
+    return _task_to_read(task)
+
+
+@router.patch("/{plan_id}/tasks/{task_id}", response_model=MaintenanceTaskRead)
+def update_maintenance_task(
+    plan_id: UUID,
+    task_id: UUID,
+    payload: MaintenanceTaskUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> MaintenanceTaskRead:
+    """Wartungsaufgabe aktualisieren (z. B. Artikel zuweisen)."""
+    task = (
+        db.query(MaintenanceTask)
+        .filter(
+            MaintenanceTask.id == task_id,
+            MaintenanceTask.maintenance_plan_id == plan_id,
+        )
+        .first()
+    )
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aufgabe nicht gefunden",
+        )
+    if payload.name is not None:
+        task.name = payload.name
+    if payload.description is not None:
+        task.description = payload.description
+    if payload.sort_order is not None:
+        task.sort_order = payload.sort_order
+    if payload.article_id is not None:
+        task.article_id = payload.article_id
+    else:
+        # Explizit auf None setzen wenn article_id im Payload enthalten ist
+        if "article_id" in payload.model_fields_set:
+            task.article_id = None
+    if payload.quantity is not None:
+        task.quantity = payload.quantity
+    if payload.unit is not None:
+        task.unit = payload.unit
+    db.commit()
+    db.refresh(task)
+    return _task_to_read(task)
 
 
 @router.delete("/{plan_id}/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -140,7 +276,7 @@ def delete_maintenance_task(
     plan_id: UUID,
     task_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> None:
     """Remove task from maintenance plan."""
     task = (
@@ -158,3 +294,106 @@ def delete_maintenance_task(
         )
     db.delete(task)
     db.commit()
+
+
+@router.post("/{plan_id}/document", response_model=MaintenancePlanRead)
+async def upload_plan_document(
+    plan_id: UUID,
+    file: Annotated[UploadFile, File()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> MaintenancePlanRead:
+    """Hersteller-Dokument (PDF) an Wartungsplan anhängen. Ersetzt ein vorhandenes Dokument."""
+    plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wartungsplan nicht gefunden")
+
+    if file.content_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Dateityp nicht erlaubt. Erlaubt: PDF, JPEG, PNG",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_DOCUMENT_SIZE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Datei zu groß (max. 20 MB)")
+
+    # Vorhandenes Dokument ersetzen
+    if plan.document_id:
+        old_doc = db.query(Document).filter(Document.id == plan.document_id).first()
+        if old_doc:
+            try:
+                Path(old_doc.file_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+            db.delete(old_doc)
+            db.flush()
+
+    settings = get_settings()
+    upload_dir = Path(settings.UPLOAD_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "document.pdf").suffix or ".pdf"
+    stored_name = f"{uuid.uuid4()}{ext}"
+    file_path = upload_dir / stored_name
+    file_path.write_bytes(content)
+
+    doc = Document(
+        filename=file.filename or stored_name,
+        content_type=file.content_type,
+        file_path=str(file_path),
+        file_size=len(content),
+        created_by=current_user.id,
+    )
+    db.add(doc)
+    db.flush()
+
+    plan.document_id = doc.id
+    db.commit()
+    db.refresh(plan)
+    return MaintenancePlanRead.from_orm_with_document(plan)
+
+
+@router.delete("/{plan_id}/document", status_code=status.HTTP_204_NO_CONTENT)
+def delete_plan_document(
+    plan_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> None:
+    """Dokument vom Wartungsplan entfernen und Datei löschen."""
+    plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wartungsplan nicht gefunden")
+    if not plan.document_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kein Dokument vorhanden")
+
+    doc = db.query(Document).filter(Document.id == plan.document_id).first()
+    plan.document_id = None
+    if doc:
+        try:
+            Path(doc.file_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+        db.delete(doc)
+    db.commit()
+
+
+@router.get("/{plan_id}/document")
+def download_plan_document(
+    plan_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FileResponse:
+    """Hersteller-Dokument des Wartungsplans herunterladen."""
+    plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
+    if not plan or not plan.document_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kein Dokument vorhanden")
+
+    doc = db.query(Document).filter(Document.id == plan.document_id).first()
+    if not doc or not Path(doc.file_path).exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Datei nicht gefunden")
+
+    return FileResponse(
+        path=doc.file_path,
+        media_type=doc.content_type,
+        filename=doc.filename,
+    )

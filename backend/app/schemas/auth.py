@@ -54,6 +54,12 @@ class RegisterRequest(BaseModel):
         return v
 
 
+class RegisterResponse(BaseModel):
+    """Antwort nach erfolgreicher Registrierung."""
+
+    message: str
+
+
 class ChangePasswordRequest(BaseModel):
     """Change own password."""
 
@@ -70,6 +76,7 @@ class UserResponse(BaseModel):
     last_name: str
     role_name: str
     is_active: bool
+    permissions: dict | None = None
 
     class Config:
         from_attributes = True

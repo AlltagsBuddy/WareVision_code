@@ -13,6 +13,10 @@ class DocumentRead(BaseModel):
     id: UUID
     customer_id: Optional[UUID] = None
     vehicle_id: Optional[UUID] = None
+    ocr_customer_id: Optional[UUID] = None
+    ocr_vehicle_id: Optional[UUID] = None
+    ocr_customer_name: Optional[str] = None
+    ocr_vehicle_label: Optional[str] = None
     filename: str
     content_type: str
     file_size: int

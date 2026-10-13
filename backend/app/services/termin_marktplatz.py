@@ -19,6 +19,74 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 
 
+def resolve_appointment_type_for_terminmarktplatz(data: dict[str, Any]) -> str:
+    """
+    Ordnet Terminmarktplatz-Angaben dem WareVision-Typ zu: workshop | test_drive.
+    Nutzt explizite Typ-Felder, sonst Titel/Beschreibung (z. B. „Probefahrt“).
+    """
+    raw = (
+        data.get("appointment_type_raw")
+        or data.get("appointment_type")
+        or data.get("appointmentType")
+        or data.get("booking_type")
+        or data.get("bookingType")
+    )
+    if raw is not None:
+        s = str(raw).strip().lower().replace("ä", "a").replace("ö", "o").replace("ü", "u")
+        s_compact = s.replace(" ", "").replace("-", "").replace("_", "")
+
+        test_aliases = (
+            "testdrive",
+            "test_drive",
+            "probefahrt",
+            "fahrprobe",
+            "probefahren",
+            "fahrzeugtest",
+            "motorradprobefahrt",
+        )
+        if s in ("test_drive", "test-drive", "testdrive") or s_compact in test_aliases:
+            return "test_drive"
+        if any(a in s_compact for a in ("probefahrt", "fahrprobe")) or (
+            "test" in s and "drive" in s
+        ):
+            return "test_drive"
+
+        workshop_aliases = (
+            "workshop",
+            "werkstatt",
+            "service",
+            "reparatur",
+            "wartung",
+            "inspektion",
+            "instandsetzung",
+            "check",
+        )
+        if s in workshop_aliases or s_compact in workshop_aliases:
+            return "workshop"
+
+    blob = " ".join(
+        str(x or "")
+        for x in (data.get("title"), data.get("description"))
+    )
+    b = blob.lower().replace("ä", "a").replace("ö", "o").replace("ü", "u")
+    b_compact = b.replace(" ", "").replace("-", "")
+
+    if any(
+        kw in b or kw in b_compact
+        for kw in (
+            "probefahrt",
+            "probe fahrt",
+            "fahrprobe",
+            "test drive",
+            "testdrive",
+            "probefahren",
+        )
+    ):
+        return "test_drive"
+
+    return "workshop"
+
+
 def _phone_from_webhook(val: Any) -> str | None:
     """Telefon aus Webhook normalisieren (leer → None)."""
     if val is None:
@@ -32,6 +100,64 @@ def _get_admin_user_id(db: Session) -> UUID | None:
     from app.models.role import Role
     admin = db.query(User).join(Role, User.role_id == Role.id).filter(Role.name == "admin").first()
     return admin.id if admin else None
+
+
+def _unwrap_webhook_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Entpackt gängige Webhook-Hüllen (payload, body, data, event) und flacht
+    verschachtelte booking/appointment-Objekte ab – sonst fehlen IDs/Zeiten auf oberster Ebene.
+    """
+    if not isinstance(payload, dict):
+        return {}
+
+    raw: dict[str, Any] = dict(payload)
+
+    # z. B. { "items": [ { ... eine Buchung ... } ], "meta": ... }
+    for arr_key in ("items", "results", "records"):
+        arr = raw.get(arr_key)
+        if isinstance(arr, list) and len(arr) >= 1 and isinstance(arr[0], dict):
+            merged = {k: v for k, v in raw.items() if k != arr_key}
+            merged.update(arr[0])
+            raw = merged
+            break
+
+    for _depth in range(8):
+        progressed = False
+
+        for key in ("payload", "body", "data", "event", "message", "record"):
+            if key not in raw:
+                continue
+            inner = raw[key]
+            if not isinstance(inner, dict) or not inner:
+                continue
+            if key == "event" and isinstance(inner.get("data"), dict):
+                # z. B. Stripe-artig: event.data = eigentliche Nutzlast
+                raw = {**inner["data"], **{k: v for k, v in inner.items() if k != "data"}}
+            else:
+                raw = dict(inner)
+            progressed = True
+            break
+
+        if progressed:
+            continue
+
+        for nk in ("booking", "appointment", "reservation", "slot"):
+            sub = raw.get(nk)
+            if isinstance(sub, dict) and sub:
+                flat = {k: v for k, v in raw.items() if k != nk}
+                for k, v in sub.items():
+                    if flat.get(k) in (None, "") and v not in (None, ""):
+                        flat[k] = v
+                    elif k not in flat:
+                        flat[k] = v
+                raw = flat
+                progressed = True
+                break
+
+        if not progressed:
+            break
+
+    return raw
 
 
 def _merge_nested_customer(raw: dict[str, Any]) -> dict[str, Any]:
@@ -79,8 +205,24 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
                 return data[k]
         return None
 
+    ext_raw = get(
+        "external_booking_id",
+        "externalBookingId",
+        "booking_id",
+        "bookingId",
+        "bookingNumber",
+        "booking_reference",
+        "reference",
+        "externalId",
+        "public_id",
+        "uuid",
+        "id",
+    )
+    # Kein „or ""“: numerische 0 wäre sonst leer; leere Strings bleiben leer
+    external_booking_id = "" if ext_raw is None else str(ext_raw).strip()
+
     return {
-        "external_booking_id": str(get("external_booking_id", "externalBookingId", "booking_id", "bookingId", "id", "uuid") or ""),
+        "external_booking_id": external_booking_id,
         "starts_at": get("starts_at", "startsAt", "start_time", "startTime", "start", "date_from", "dateFrom"),
         "ends_at": get("ends_at", "endsAt", "end_time", "endTime", "end", "date_to", "dateTo"),
         "customer_first_name": get("customer_first_name", "customerFirstName", "first_name", "firstName", "vorname"),
@@ -102,7 +244,21 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
         "vehicle_vin": get("vehicle_vin", "vehicleVin", "vin"),
         "title": get("title", "subject"),
         "description": get("description", "notes", "bemerkung"),
-        "action": get("action", "event"),  # booking, cancel, update
+        # nicht "event" hier: kann ein Objekt sein; cancel/update oft als type/operation
+        "action": get("action", "type", "operation"),
+        "appointment_type_raw": get(
+            "appointment_type",
+            "appointmentType",
+            "booking_type",
+            "bookingType",
+            "service_type",
+            "serviceType",
+            "termin_typ",
+            "terminTyp",
+            "category",
+            "service_category",
+            "serviceCategory",
+        ),
     }
 
 
@@ -113,14 +269,13 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
     - action=cancel: Termin stornieren
     - action=update: Termin aktualisieren (falls unterstützt)
     """
-    # Payload kann in "data", "booking", "reservation" oder "appointment" gewrappt sein
-    raw = payload
-    for wrapper in ("data", "booking", "reservation", "appointment"):
-        if isinstance(payload.get(wrapper), dict):
-            raw = payload[wrapper]
-            break
-
-    logger.info("Terminmarktplatz webhook received: external_id=%s", raw.get("external_booking_id") or raw.get("booking_id") or raw.get("id"))
+    raw = _unwrap_webhook_payload(payload if isinstance(payload, dict) else {})
+    logger.info(
+        "Terminmarktplatz webhook: top_keys=%s unwrapped_keys=%s external_hint=%s",
+        list(payload.keys()) if isinstance(payload, dict) else [],
+        list(raw.keys()),
+        raw.get("external_booking_id") or raw.get("booking_id") or raw.get("bookingNumber") or raw.get("id"),
+    )
 
     raw = _merge_nested_customer(raw)
     data = _normalize_webhook_payload(raw)
@@ -135,7 +290,16 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
         .first()
     )
 
-    action = (data.get("action") or "booking").lower()
+    act = data.get("action")
+    if isinstance(act, str) and act.strip():
+        action = act.strip().lower()
+    else:
+        action = "booking"
+
+    if action in ("cancellation", "cancelled", "canceled", "storno"):
+        action = "cancel"
+    if action in ("updated", "change", "changed", "reschedule", "rescheduled"):
+        action = "update"
 
     if action == "cancel" and existing:
         existing.status = "cancelled"
@@ -161,6 +325,12 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
                 )
             except (ValueError, AttributeError):
                 pass
+        if data.get("title") is not None:
+            existing.title = data.get("title") or existing.title
+        if data.get("description") is not None:
+            existing.description = data.get("description")
+        if data.get("appointment_type_raw") or data.get("title") or data.get("description"):
+            existing.appointment_type = resolve_appointment_type_for_terminmarktplatz(data)
         db.commit()
         db.refresh(existing)
         from app.services.audit import log_audit
@@ -276,10 +446,11 @@ def process_webhook(db: Session, payload: dict[str, Any]) -> Appointment | None:
         vehicle_id = vehicle.id
 
     admin_id = _get_admin_user_id(db)
+    apt_type = resolve_appointment_type_for_terminmarktplatz(data)
     apt = Appointment(
         customer_id=customer_id,
         vehicle_id=vehicle_id,
-        appointment_type="workshop",
+        appointment_type=apt_type,
         source="termin_marktplatz",
         external_booking_id=external_id,
         status="planned",

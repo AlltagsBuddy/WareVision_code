@@ -22,10 +22,14 @@ export default function Invoices() {
   const [showForm, setShowForm] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [overdueFilter, setOverdueFilter] = useState(searchParams.get('overdue') === '1')
+  const [search, setSearch] = useState('')
+  const [sortField, setSortField] = useState('invoice_date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [form, setForm] = useState({
     customer_id: '',
     workshop_order_id: '',
     invoice_date: new Date().toISOString().slice(0, 10),
+    service_date: '',
     due_date: '',
     notes: '',
     items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] as { description: string; quantity: number; unit: string; unit_price: number; vat_rate: number }[],
@@ -34,6 +38,16 @@ export default function Invoices() {
   const [error, setError] = useState('')
   const [previewModal, setPreviewModal] = useState<{ invoiceNumber: string; url: string } | null>(null)
   const [sendEmailModal, setSendEmailModal] = useState<{ inv: any; recipientEmail: string } | null>(null)
+  const [cancelModal, setCancelModal] = useState<{ inv: any; reason: string } | null>(null)
+  const [cancelError, setCancelError] = useState('')
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => Promise<void> } | null>(null)
+  const [confirmError, setConfirmError] = useState('')
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false)
+  const [zugferdImportResult, setZugferdImportResult] = useState<any | null>(null)
+  const [zugferdImporting, setZugferdImporting] = useState(false)
+  const [zugferdImportError, setZugferdImportError] = useState('')
+  const [reminderError, setReminderError] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -117,11 +131,12 @@ export default function Invoices() {
           customer_id: customerId,
           workshop_order_id: form.workshop_order_id,
           invoice_date: form.invoice_date,
+          service_date: form.service_date || undefined,
           due_date: form.due_date || undefined,
           notes: form.notes || undefined,
         })
         setShowForm(false)
-        setForm({ customer_id: '', workshop_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '', items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] })
+        setForm({ customer_id: '', workshop_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), service_date: '', due_date: '', notes: '', items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] })
         const updated = await invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter })
         setInvoices(updated)
         const ords = await workshopOrdersApi.list()
@@ -142,6 +157,7 @@ export default function Invoices() {
         await invoicesApi.create({
           customer_id: form.customer_id,
           invoice_date: form.invoice_date,
+          service_date: form.service_date || undefined,
           due_date: form.due_date || undefined,
           notes: form.notes || undefined,
           items: validItems.map((i) => ({
@@ -153,7 +169,7 @@ export default function Invoices() {
           })),
         })
         setShowForm(false)
-        setForm({ customer_id: '', workshop_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '', items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] })
+        setForm({ customer_id: '', workshop_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), service_date: '', due_date: '', notes: '', items: [{ description: '', quantity: 1, unit: 'Stk', unit_price: 0, vat_rate: 19 }] })
         const updated = await invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter })
         setInvoices(updated)
       } catch (err) {
@@ -164,30 +180,99 @@ export default function Invoices() {
     }
   }
 
-  const handleIssue = async (id: string) => {
+  const runConfirm = async () => {
+    if (!confirmModal) return
+    setConfirmError('')
+    setConfirmSubmitting(true)
     try {
-      await invoicesApi.issue(id)
-      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'issued' } : i)))
+      await confirmModal.onConfirm()
+      setConfirmModal(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Fehler')
+      setConfirmError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setConfirmSubmitting(false)
     }
   }
 
-  const handleMarkPaid = async (id: string) => {
+  const handleIssue = (inv: any) => {
+    setConfirmError('')
+    setConfirmModal({
+      title: 'Rechnung ausstellen',
+      message: `Rechnung ${inv.invoice_number} wirklich ausstellen? Sie kann danach nicht mehr bearbeitet werden.`,
+      onConfirm: async () => {
+        await invoicesApi.issue(inv.id)
+        setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'issued' } : i)))
+      },
+    })
+  }
+
+  const handleMarkPaid = (inv: any) => {
+    setConfirmError('')
+    setConfirmModal({
+      title: 'Als bezahlt markieren',
+      message: `Rechnung ${inv.invoice_number} als bezahlt markieren?`,
+      onConfirm: async () => {
+        await invoicesApi.markPaid(inv.id)
+        setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'paid' } : i)))
+      },
+    })
+  }
+
+  const handleCancelConfirm = async () => {
+    if (!cancelModal) return
+    setCancelError('')
+    setCancelSubmitting(true)
     try {
-      await invoicesApi.markPaid(id)
-      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'paid' } : i)))
+      await invoicesApi.cancel(cancelModal.inv.id, cancelModal.reason)
+      setCancelModal(null)
+      const updated = await invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter })
+      setInvoices(updated)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Fehler')
+      setCancelError(err instanceof Error ? err.message : 'Stornierung fehlgeschlagen')
+    } finally {
+      setCancelSubmitting(false)
     }
   }
 
   const handleMarkReminder = async (id: string, level: 1 | 2 | 3) => {
+    setReminderError('')
     try {
       const updated = await invoicesApi.markReminder(id, level)
       setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, reminder_level: updated.reminder_level, reminder_date: updated.reminder_date } : i)))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Fehler')
+      setReminderError(err instanceof Error ? err.message : 'Fehler beim Setzen der Mahnstufe')
+    }
+  }
+
+  const handleDownloadReminderPdf = async (inv: any) => {
+    try {
+      const blob = await invoicesApi.downloadReminderPdf(inv.id)
+      const subjects: Record<number, string> = { 1: 'Zahlungserinnerung', 2: '1_Mahnung', 3: '2_Mahnung' }
+      const label = subjects[inv.reminder_level as number] ?? `Mahnung_${inv.reminder_level}`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${label}_${inv.invoice_number}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setReminderError(err instanceof Error ? err.message : 'Mahnbrief konnte nicht geladen werden')
+    }
+  }
+
+  const handleZugferdImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setZugferdImportError('')
+    setZugferdImporting(true)
+    try {
+      const result = await invoicesApi.importZugferd(file)
+      setZugferdImportResult(result)
+    } catch (err) {
+      setZugferdImportError(err instanceof Error ? err.message : 'Import fehlgeschlagen')
+    } finally {
+      setZugferdImporting(false)
     }
   }
 
@@ -260,14 +345,48 @@ export default function Invoices() {
   }
 
   const isOverdue = (inv: any) => {
-    if (!inv.due_date || inv.status === 'paid' || inv.status === 'cancelled') return false
+    // Entwürfe können nicht überfällig sein – sie wurden noch nicht ausgestellt
+    if (!inv.due_date || inv.status === 'draft' || inv.status === 'paid' || inv.status === 'cancelled') return false
     return new Date(inv.due_date) < new Date(new Date().toISOString().slice(0, 10))
   }
+
+  const handleSort = (field: string) => {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortField(field); setSortDir('asc') }
+  }
+  const sortIcon = (field: string) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕'
+
+  const q = search.toLowerCase()
+  const displayed = [...invoices]
+    .filter((inv) =>
+      !q ||
+      (inv.invoice_number || '').toLowerCase().includes(q) ||
+      getCustomerName(inv.customer_id).toLowerCase().includes(q)
+    )
+    .sort((a, b) => {
+      let va = '', vb = ''
+      if (sortField === 'invoice_number') { va = a.invoice_number || ''; vb = b.invoice_number || '' }
+      else if (sortField === 'customer') { va = getCustomerName(a.customer_id); vb = getCustomerName(b.customer_id) }
+      else if (sortField === 'gross_amount') {
+        return sortDir === 'asc'
+          ? Number(a.gross_amount) - Number(b.gross_amount)
+          : Number(b.gross_amount) - Number(a.gross_amount)
+      }
+      else if (sortField === 'due_date') { va = a.due_date || ''; vb = b.due_date || '' }
+      else { va = a.invoice_date || ''; vb = b.invoice_date || '' }
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
 
   return (
     <div className="page">
       <h1>Rechnungen</h1>
       <div className="toolbar">
+        <input
+          type="search"
+          placeholder="Rechnungsnr., Kunde..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select">
           <option value="">Alle Status</option>
           {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -278,6 +397,12 @@ export default function Invoices() {
           <input type="checkbox" checked={overdueFilter} onChange={(e) => setOverdueFilter(e.target.checked)} />
           Überfällig
         </label>
+        <label className="btn-secondary" style={{ cursor: 'pointer' }}>
+          {zugferdImporting ? 'Lese...' : 'ZUGFeRD importieren'}
+          <input type="file" accept=".pdf,application/pdf" style={{ display: 'none' }} onChange={handleZugferdImport} disabled={zugferdImporting} />
+        </label>
+        {zugferdImportError && <span className="error" style={{ fontSize: '0.85rem' }}>{zugferdImportError}</span>}
+        {reminderError && <span className="error" style={{ fontSize: '0.85rem' }}>{reminderError}</span>}
         <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
           + Neue Rechnung
         </button>
@@ -329,6 +454,16 @@ export default function Invoices() {
                     value={form.invoice_date}
                     onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
                     required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="inv-service">Leistungsdatum</label>
+                  <input
+                    id="inv-service"
+                    type="date"
+                    value={form.service_date}
+                    onChange={(e) => setForm({ ...form, service_date: e.target.value })}
+                    title="Leer lassen = Rechnungsdatum"
                   />
                 </div>
                 <div className="form-group">
@@ -456,23 +591,23 @@ export default function Invoices() {
         <table className="table">
           <thead>
             <tr>
-              <th>Rechnungsnr.</th>
+              <th onClick={() => handleSort('invoice_number')} style={{ cursor: 'pointer' }}>Rechnungsnr.{sortIcon('invoice_number')}</th>
               <th>Status</th>
               <th>Mahnung</th>
-              <th>Kunde</th>
-              <th>Datum</th>
-              <th>Fällig</th>
-              <th>Brutto</th>
+              <th onClick={() => handleSort('customer')} style={{ cursor: 'pointer' }}>Kunde{sortIcon('customer')}</th>
+              <th onClick={() => handleSort('invoice_date')} style={{ cursor: 'pointer' }}>Datum{sortIcon('invoice_date')}</th>
+              <th onClick={() => handleSort('due_date')} style={{ cursor: 'pointer' }}>Fällig{sortIcon('due_date')}</th>
+              <th onClick={() => handleSort('gross_amount')} style={{ cursor: 'pointer' }}>Brutto{sortIcon('gross_amount')}</th>
               <th>Aktionen</th>
             </tr>
           </thead>
           <tbody>
-            {invoices.length === 0 ? (
+            {displayed.length === 0 ? (
               <tr>
                 <td colSpan={8}>Keine Rechnungen vorhanden.</td>
               </tr>
             ) : (
-              invoices.map((inv) => (
+              displayed.map((inv) => (
                 <tr key={inv.id} className={isOverdue(inv) ? 'warning-row' : ''}>
                   <td><strong>{inv.invoice_number}</strong></td>
                   <td>
@@ -481,25 +616,26 @@ export default function Invoices() {
                   </td>
                   <td>
                     {inv.reminder_level > 0 ? (
-                      <span title={inv.reminder_date ? `am ${formatDate(inv.reminder_date)}` : ''}>
-                        {inv.reminder_level}. Mahnung
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span title={inv.reminder_date ? `am ${formatDate(inv.reminder_date)}` : ''}>
+                          {inv.reminder_level === 1 ? 'Zahlungserinnerung' : `${inv.reminder_level - 1}. Mahnung`}
+                          {inv.reminder_date && <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginLeft: 4 }}>({formatDate(inv.reminder_date)})</span>}
+                        </span>
+                        <button type="button" onClick={() => handleDownloadReminderPdf(inv)} className="btn-secondary btn-sm">
+                          Mahnbrief PDF
+                        </button>
+                        {inv.reminder_level < 3 && isOverdue(inv) && (
+                          <button type="button" onClick={() => handleMarkReminder(inv.id, (inv.reminder_level + 1) as 2 | 3)} className="btn-secondary btn-sm">
+                            {inv.reminder_level === 1 ? '1. Mahnung' : '2. Mahnung'}
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       isOverdue(inv) && (inv.status === 'issued' || inv.status === 'partially_paid') ? (
                         <button type="button" onClick={() => handleMarkReminder(inv.id, 1)} className="btn-secondary btn-sm">
-                          1. Mahnung
+                          Erinnerung
                         </button>
                       ) : '–'
-                    )}
-                    {inv.reminder_level === 1 && isOverdue(inv) && (
-                      <button type="button" onClick={() => handleMarkReminder(inv.id, 2)} className="btn-secondary btn-sm" style={{ marginLeft: 4 }}>
-                        2. Mahnung
-                      </button>
-                    )}
-                    {inv.reminder_level === 2 && isOverdue(inv) && (
-                      <button type="button" onClick={() => handleMarkReminder(inv.id, 3)} className="btn-secondary btn-sm" style={{ marginLeft: 4 }}>
-                        3. Mahnung
-                      </button>
                     )}
                   </td>
                   <td>{getCustomerName(inv.customer_id)}</td>
@@ -525,10 +661,18 @@ export default function Invoices() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleIssue(inv.id)}
+                          onClick={() => handleIssue(inv)}
                           className="btn-secondary btn-sm"
                         >
                           Ausstellen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
+                          className="btn-secondary btn-sm"
+                          style={{ color: 'var(--color-error)' }}
+                        >
+                          Stornieren
                         </button>
                       </>
                     )}
@@ -536,7 +680,7 @@ export default function Invoices() {
                       <>
                         <button
                           type="button"
-                          onClick={() => handleMarkPaid(inv.id)}
+                          onClick={() => handleMarkPaid(inv)}
                           className="btn-secondary btn-sm"
                         >
                           Als bezahlt
@@ -568,6 +712,14 @@ export default function Invoices() {
                           className="btn-secondary btn-sm"
                         >
                           ZUGFeRD
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
+                          className="btn-secondary btn-sm"
+                          style={{ color: 'var(--color-error)' }}
+                        >
+                          Stornieren
                         </button>
                       </>
                     )}
@@ -601,6 +753,14 @@ export default function Invoices() {
                         >
                           ZUGFeRD
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
+                          className="btn-secondary btn-sm"
+                          style={{ color: 'var(--color-error)' }}
+                        >
+                          Stornieren
+                        </button>
                       </>
                     )}
                   </td>
@@ -609,6 +769,127 @@ export default function Invoices() {
             )}
           </tbody>
         </table>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="modal-overlay" onClick={() => setConfirmModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{confirmModal.title}</h2>
+            <p>{confirmModal.message}</p>
+            {confirmError && <p className="error" style={{ marginTop: '0.75rem' }}>{confirmError}</p>}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setConfirmModal(null)} className="btn-secondary">
+                Abbrechen
+              </button>
+              <button type="button" onClick={runConfirm} disabled={confirmSubmitting} className="btn-primary">
+                {confirmSubmitting ? 'Wird gespeichert...' : 'Bestätigen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {zugferdImportResult && (
+        <div className="modal-overlay" onClick={() => setZugferdImportResult(null)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>ZUGFeRD – Importierte Rechnungsdaten</h2>
+            <div style={{ fontSize: '0.9rem' }}>
+              <table className="table" style={{ marginBottom: '1rem' }}>
+                <tbody>
+                  <tr><td><strong>Rechnungsnummer</strong></td><td>{zugferdImportResult.invoice_number || '–'}</td></tr>
+                  <tr><td><strong>Rechnungsdatum</strong></td><td>{zugferdImportResult.invoice_date || '–'}</td></tr>
+                  <tr><td><strong>Fällig</strong></td><td>{zugferdImportResult.due_date || '–'}</td></tr>
+                  <tr><td><strong>Währung</strong></td><td>{zugferdImportResult.currency || '–'}</td></tr>
+                  <tr><td><strong>Aussteller</strong></td><td>
+                    {zugferdImportResult.seller?.name || '–'}
+                    {zugferdImportResult.seller?.vat_id ? ` (USt-IdNr.: ${zugferdImportResult.seller.vat_id})` : ''}
+                    {zugferdImportResult.seller?.street ? `, ${zugferdImportResult.seller.street}` : ''}
+                    {zugferdImportResult.seller?.postal_code ? `, ${zugferdImportResult.seller.postal_code}` : ''}
+                    {zugferdImportResult.seller?.city ? ` ${zugferdImportResult.seller.city}` : ''}
+                  </td></tr>
+                  <tr><td><strong>Empfänger</strong></td><td>{zugferdImportResult.buyer?.name || '–'}</td></tr>
+                  <tr><td><strong>Netto</strong></td><td>{zugferdImportResult.net_amount ? `${zugferdImportResult.net_amount} ${zugferdImportResult.currency}` : '–'}</td></tr>
+                  <tr><td><strong>MwSt</strong></td><td>{zugferdImportResult.vat_amount ? `${zugferdImportResult.vat_amount} ${zugferdImportResult.currency}` : '–'}</td></tr>
+                  <tr><td><strong>Brutto</strong></td><td><strong>{zugferdImportResult.gross_amount ? `${zugferdImportResult.gross_amount} ${zugferdImportResult.currency}` : '–'}</strong></td></tr>
+                </tbody>
+              </table>
+              {zugferdImportResult.items?.length > 0 && (
+                <>
+                  <h3 style={{ marginBottom: '0.5rem' }}>Positionen</h3>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Pos</th>
+                        <th>Beschreibung</th>
+                        <th>Menge</th>
+                        <th>Einheit</th>
+                        <th>Einzelpreis</th>
+                        <th>MwSt %</th>
+                        <th>Gesamt netto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zugferdImportResult.items.map((item: any, idx: number) => (
+                        <tr key={idx}>
+                          <td>{item.line_id || idx + 1}</td>
+                          <td>{item.description || '–'}</td>
+                          <td>{item.quantity}</td>
+                          <td>{item.unit || '–'}</td>
+                          <td>{item.unit_price ? `${item.unit_price} ${zugferdImportResult.currency}` : '–'}</td>
+                          <td>{item.vat_rate || '–'}</td>
+                          <td>{item.line_total_net ? `${item.line_total_net} ${zugferdImportResult.currency}` : '–'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setZugferdImportResult(null)} className="btn-primary">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelModal && (
+        <div className="modal-overlay" onClick={() => setCancelModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Rechnung stornieren</h2>
+            <p>
+              Rechnung <strong>{cancelModal.inv.invoice_number}</strong> wirklich stornieren?
+            </p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>
+              Es wird eine Stornorechnung (STO-...) mit negativen Beträgen erstellt. Die Originalrechnung wird als "Storniert" markiert. Dieser Vorgang ist GoBD-konform und kann nicht rückgängig gemacht werden.
+            </p>
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label htmlFor="cancel-reason">Stornierungsgrund (optional)</label>
+              <textarea
+                id="cancel-reason"
+                value={cancelModal.reason}
+                onChange={(e) => setCancelModal({ ...cancelModal, reason: e.target.value })}
+                placeholder="z.B. Falsche Positionen, Kunde hat widerrufen"
+                rows={3}
+                style={{ width: '100%' }}
+              />
+            </div>
+            {cancelError && <p className="error" style={{ marginTop: '0.75rem' }}>{cancelError}</p>}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setCancelModal(null)} className="btn-secondary">
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelConfirm}
+                disabled={cancelSubmitting}
+                className="btn-primary"
+                style={{ background: 'var(--color-error)' }}
+              >
+                {cancelSubmitting ? 'Wird storniert...' : 'Jetzt stornieren'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

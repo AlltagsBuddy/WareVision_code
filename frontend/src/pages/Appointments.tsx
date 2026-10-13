@@ -31,6 +31,14 @@ function formatDateShort(d: Date): string {
   return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })
 }
 
+/** Lokales Kalenderdatum YYYY-MM-DD – vermeidet UTC-Verschiebung (Termine sonst „unsichtbar“ im Raster). */
+function localDateKey(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function Appointments() {
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date()
@@ -59,6 +67,7 @@ export default function Appointments() {
     vehicle_vin: '',
     title: '',
     description: '',
+    appointment_type: '' as '' | 'workshop' | 'test_drive',
   })
   const [form, setForm] = useState({
     customer_id: '',
@@ -72,6 +81,9 @@ export default function Appointments() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [emailNotice, setEmailNotice] = useState('')
+  const [cancelError, setCancelError] = useState('')
+  const [tmWarning, setTmWarning] = useState('')
 
   const weekDates = getWeekDates(weekStart)
   const fromDate = new Date(weekDates[0])
@@ -80,18 +92,42 @@ export default function Appointments() {
   toDate.setHours(23, 59, 59, 999)
 
   useEffect(() => {
+    let cancelled = false
     Promise.all([
       appointmentsApi.list({
         from_date: fromDate.toISOString(),
         to_date: toDate.toISOString(),
+        limit: 500,
       }),
       customersApi.list({ limit: 100 }),
     ])
       .then(([apts, custs]) => {
-        setAppointments(apts)
-        setCustomers(custs)
+        if (!cancelled) {
+          setAppointments(apts)
+          setCustomers(custs)
+        }
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fromDate.toISOString(), toDate.toISOString()])
+
+  // Termine von Terminmarktplatz (Webhook) ohne Seitenreload sichtbar machen
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      appointmentsApi
+        .list({
+          from_date: fromDate.toISOString(),
+          to_date: toDate.toISOString(),
+          limit: 500,
+        })
+        .then(setAppointments)
+        .catch(() => {})
+    }, 45000)
+    return () => window.clearInterval(id)
   }, [fromDate.toISOString(), toDate.toISOString()])
 
   useEffect(() => {
@@ -139,7 +175,7 @@ export default function Appointments() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const dateStr = form.date || weekDates[0].toISOString().slice(0, 10)
+    const dateStr = form.date || localDateKey(weekDates[0])
     const [sh, sm] = form.startTime.split(':').map(Number)
     const [eh, em] = form.endTime.split(':').map(Number)
     const startsAt = new Date(dateStr)
@@ -151,8 +187,9 @@ export default function Appointments() {
       return
     }
     setSubmitting(true)
+    setEmailNotice('')
     try {
-      await appointmentsApi.create({
+      const created = await appointmentsApi.create({
         customer_id: form.customer_id || undefined,
         vehicle_id: form.vehicle_id || undefined,
         appointment_type: form.appointment_type,
@@ -161,6 +198,9 @@ export default function Appointments() {
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
       })
+      if (created?.email_benachrichtigung) {
+        setEmailNotice(created.email_benachrichtigung)
+      }
       setShowForm(false)
       setForm({ customer_id: '', vehicle_id: '', appointment_type: 'workshop', title: '', description: '', date: '', startTime: '09:00', endTime: '10:00' })
       const updated = await appointmentsApi.list({
@@ -182,7 +222,7 @@ export default function Appointments() {
       setError('Externe Buchungs-ID erforderlich.')
       return
     }
-    const dateStr = importForm.date || weekDates[0].toISOString().slice(0, 10)
+    const dateStr = importForm.date || localDateKey(weekDates[0])
     const [sh, sm] = importForm.startTime.split(':').map(Number)
     const [eh, em] = importForm.endTime.split(':').map(Number)
     const startsAt = new Date(dateStr)
@@ -207,6 +247,9 @@ export default function Appointments() {
         vehicle_vin: importForm.vehicle_vin || undefined,
         title: importForm.title || undefined,
         description: importForm.description || undefined,
+        ...(importForm.appointment_type
+          ? { appointment_type: importForm.appointment_type }
+          : {}),
       })
       setShowImportForm(false)
       setImportForm({
@@ -222,6 +265,7 @@ export default function Appointments() {
         vehicle_vin: '',
         title: '',
         description: '',
+        appointment_type: '',
       })
       const updated = await appointmentsApi.list({
         from_date: fromDate.toISOString(),
@@ -238,6 +282,7 @@ export default function Appointments() {
   const handleCancelClick = (a: any) => {
     setCancellingAppointment(a)
     setCancelReason('')
+    setCancelError('')
   }
 
   const handleCancelConfirm = async () => {
@@ -248,6 +293,7 @@ export default function Appointments() {
       })
       setCancellingAppointment(null)
       setCancelReason('')
+      setCancelError('')
       const updated = await appointmentsApi.list({
         from_date: fromDate.toISOString(),
         to_date: toDate.toISOString(),
@@ -259,10 +305,10 @@ export default function Appointments() {
         !res.termin_marktplatz_notified &&
         res.termin_marktplatz_error
       ) {
-        alert(`Termin storniert.\n\nHinweis: ${res.termin_marktplatz_error}`)
+        setTmWarning(`Termin wurde storniert, aber Termin-Marktplatz konnte nicht benachrichtigt werden: ${res.termin_marktplatz_error}`)
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Fehler')
+      setCancelError(err instanceof Error ? err.message : 'Fehler beim Stornieren')
     }
   }
 
@@ -271,7 +317,7 @@ export default function Appointments() {
     const end = new Date(a.ends_at)
     setEditingAppointment({
       ...a,
-      date: a.starts_at.slice(0, 10),
+      date: localDateKey(new Date(a.starts_at)),
       startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
       endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
       customer_id: a.customer_id || '',
@@ -351,12 +397,12 @@ export default function Appointments() {
   }
 
   const appointmentsByDay = weekDates.reduce<Record<string, any[]>>((acc, d) => {
-    acc[d.toISOString().slice(0, 10)] = []
+    acc[localDateKey(d)] = []
     return acc
   }, {})
   appointments.forEach((a) => {
     if (a.status === 'cancelled') return
-    const key = new Date(a.starts_at).toISOString().slice(0, 10)
+    const key = localDateKey(new Date(a.starts_at))
     if (appointmentsByDay[key]) appointmentsByDay[key].push(a)
   })
 
@@ -389,6 +435,36 @@ export default function Appointments() {
         </button>
       </div>
 
+      {emailNotice && (
+        <div
+          className={/wurde an .+ gesendet|Terminbestätigung wurde/i.test(emailNotice) ? 'success' : 'error'}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            borderRadius: 6,
+          }}
+        >
+          <span>{emailNotice}</span>
+          <button
+            type="button"
+            onClick={() => setEmailNotice('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', marginLeft: '1rem' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {tmWarning && (
+        <div className="error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <span>⚠ {tmWarning}</span>
+          <button type="button" onClick={() => setTmWarning('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', marginLeft: '1rem' }}>✕</button>
+        </div>
+      )}
+
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -412,7 +488,7 @@ export default function Appointments() {
                   <input
                     id="apt-date"
                     type="date"
-                    value={form.date || weekDates[0].toISOString().slice(0, 10)}
+                    value={form.date || localDateKey(weekDates[0])}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
                     required
                   />
@@ -690,8 +766,9 @@ export default function Appointments() {
                 style={{ width: '100%' }}
               />
             </div>
+            {cancelError && <p className="error" style={{ marginTop: '0.75rem' }}>{cancelError}</p>}
             <div className="form-actions" style={{ marginTop: '1rem' }}>
-              <button type="button" onClick={() => setCancellingAppointment(null)} className="btn-secondary">
+              <button type="button" onClick={() => { setCancellingAppointment(null); setCancelError('') }} className="btn-secondary">
                 Abbrechen
               </button>
               <button type="button" onClick={handleCancelConfirm} className="btn-primary">
@@ -726,7 +803,7 @@ export default function Appointments() {
                   <label>Datum *</label>
                   <input
                     type="date"
-                    value={importForm.date || weekDates[0].toISOString().slice(0, 10)}
+                    value={importForm.date || localDateKey(weekDates[0])}
                     onChange={(e) => setImportForm({ ...importForm, date: e.target.value })}
                   />
                 </div>
@@ -802,12 +879,28 @@ export default function Appointments() {
                 </div>
               </div>
               <div className="form-group">
+                <label>Termintyp</label>
+                <select
+                  value={importForm.appointment_type}
+                  onChange={(e) =>
+                    setImportForm({
+                      ...importForm,
+                      appointment_type: e.target.value as '' | 'workshop' | 'test_drive',
+                    })
+                  }
+                >
+                  <option value="">Automatisch (aus Titel/Beschreibung)</option>
+                  <option value="workshop">{TYPE_LABELS.workshop}</option>
+                  <option value="test_drive">{TYPE_LABELS.test_drive}</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Titel</label>
                 <input
                   type="text"
                   value={importForm.title}
                   onChange={(e) => setImportForm({ ...importForm, title: e.target.value })}
-                  placeholder="z.B. Ölwechsel"
+                  placeholder="z.B. Ölwechsel oder Probefahrt"
                 />
               </div>
               <div className="form-group">
@@ -859,7 +952,7 @@ export default function Appointments() {
           </div>
           <div className="calendar-appointments">
             {weekDates.map((d) => {
-              const key = d.toISOString().slice(0, 10)
+              const key = localDateKey(d)
               const apts = appointmentsByDay[key] || []
               return apts.map((a) => {
                 const start = new Date(a.starts_at)

@@ -1,49 +1,126 @@
 import { useEffect, useState, useCallback } from 'react'
-import { articlesApi } from '../api/client'
+import { articlesApi, articleCategoriesApi, suppliersApi, manufacturersApi, storageLocationsApi } from '../api/client'
 import BarcodeScanner from '../components/BarcodeScanner'
 
 export default function Articles() {
   const [articles, setArticles] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [suppliers, setSuppliers] = useState<any[]>([])
+  const [manufacturers, setManufacturers] = useState<any[]>([])
+  const [allModels, setAllModels] = useState<any[]>([])  // alle Fahrzeugmodelle flach
+  const [storageLocations, setStorageLocations] = useState<any[]>([])
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeFilter, setBarcodeFilter] = useState('')
   const [scanModalOpen, setScanModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const PAGE_SIZE = 50
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState({
     article_number: '',
     name: '',
     description: '',
+    category_id: '',
+    supplier_id: '',
+    storage_location_id: '',
     purchase_price: 0,
     sales_price_b2c: 0,
     sales_price_b2b: 0,
     vat_rate: 19,
     minimum_stock: 0,
     barcode: '',
+    compatible_model_ids: [] as string[],
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  // Lagerorte-Verwaltung
+  const [showLocModal, setShowLocModal] = useState(false)
+  const [locForm, setLocForm] = useState({ name: '', description: '' })
+  const [locEditing, setLocEditing] = useState<any | null>(null)
+  const [locSubmitting, setLocSubmitting] = useState(false)
+  const [locError, setLocError] = useState('')
+
+  // Kategorien-Verwaltung
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [catForm, setCatForm] = useState({ name: '', description: '' })
+  const [catEditing, setCatEditing] = useState<any | null>(null)
+  const [catSubmitting, setCatSubmitting] = useState(false)
+  const [catError, setCatError] = useState('')
+
+  const loadCategories = () => articleCategoriesApi.list().then(setCategories)
+  const loadStorageLocations = () => storageLocationsApi.list().then(setStorageLocations)
+
+  useEffect(() => {
+    loadCategories()
+    loadStorageLocations()
+    suppliersApi.list().then(setSuppliers)
+    // Alle Hersteller laden und danach für jeden die Modelle
+    manufacturersApi.list().then(async (manfs) => {
+      setManufacturers(manfs)
+      const modelArrays = await Promise.all(manfs.map((m: any) => manufacturersApi.getModels(m.id).catch(() => [])))
+      const flat = modelArrays.flatMap((models: any[], i: number) =>
+        models.map((mod: any) => ({ ...mod, manufacturer_name: manfs[i].name, manufacturer_id: manfs[i].id }))
+      )
+      setAllModels(flat)
+    })
+  }, [])
+
   useEffect(() => {
     setLoading(true)
     articlesApi
-      .list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined })
-      .then(setArticles)
+      .list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, limit: PAGE_SIZE, skip: 0 })
+      .then((data) => {
+        setArticles(data)
+        setHasMore(data.length === PAGE_SIZE)
+      })
       .finally(() => setLoading(false))
-  }, [search, barcodeFilter])
+  }, [search, barcodeFilter, categoryFilter])
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const more = await articlesApi.list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, limit: PAGE_SIZE, skip: articles.length })
+      setArticles((prev) => [...prev, ...more])
+      setHasMore(more.length === PAGE_SIZE)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  const getCategoryName = (id: string | null) => {
+    if (!id) return '–'
+    return categories.find((c) => c.id === id)?.name || '–'
+  }
+
+  const toggleModel = (modelId: string) => {
+    setForm((f) => ({
+      ...f,
+      compatible_model_ids: f.compatible_model_ids.includes(modelId)
+        ? f.compatible_model_ids.filter((id) => id !== modelId)
+        : [...f.compatible_model_ids, modelId],
+    }))
+  }
 
   const resetForm = () => {
     setForm({
       article_number: '',
       name: '',
       description: '',
+      category_id: '',
+      supplier_id: '',
+      storage_location_id: '',
       purchase_price: 0,
       sales_price_b2c: 0,
       sales_price_b2b: 0,
       vat_rate: 19,
       minimum_stock: 0,
       barcode: '',
+      compatible_model_ids: [],
     })
     setEditing(null)
     setError('')
@@ -58,30 +135,39 @@ export default function Articles() {
         const updateData = {
           name: form.name,
           description: form.description || undefined,
+          category_id: form.category_id || undefined,
+          supplier_id: form.supplier_id || undefined,
+          storage_location_id: form.storage_location_id || undefined,
           purchase_price: form.purchase_price,
           sales_price_b2c: form.sales_price_b2c,
           sales_price_b2b: form.sales_price_b2b,
           vat_rate: form.vat_rate,
           minimum_stock: form.minimum_stock,
           barcode: form.barcode || undefined,
+          compatible_model_ids: form.compatible_model_ids,
         }
         await articlesApi.update(editing.id, updateData)
-        setArticles((prev) => prev.map((a) => (a.id === editing.id ? { ...a, ...updateData } : a)))
+        const updated = await articlesApi.list({ search: search || undefined })
+        setArticles(categoryFilter ? updated.filter((a: any) => a.category_id === categoryFilter) : updated)
       } else {
         const createData = {
           article_number: form.article_number,
           name: form.name,
           description: form.description || undefined,
+          category_id: form.category_id || undefined,
+          supplier_id: form.supplier_id || undefined,
+          storage_location_id: form.storage_location_id || undefined,
           purchase_price: form.purchase_price,
           sales_price_b2c: form.sales_price_b2c,
           sales_price_b2b: form.sales_price_b2b,
           vat_rate: form.vat_rate,
           minimum_stock: form.minimum_stock,
           barcode: form.barcode || undefined,
+          compatible_model_ids: form.compatible_model_ids,
         }
         await articlesApi.create(createData)
         const updated = await articlesApi.list({ search: search || undefined })
-        setArticles(updated)
+        setArticles(categoryFilter ? updated.filter((a: any) => a.category_id === categoryFilter) : updated)
       }
       setShowForm(false)
       resetForm()
@@ -113,14 +199,127 @@ export default function Articles() {
       article_number: a.article_number,
       name: a.name,
       description: a.description || '',
+      category_id: a.category_id || '',
+      supplier_id: a.supplier_id || '',
+      storage_location_id: a.storage_location_id || '',
       purchase_price: Number(a.purchase_price),
       sales_price_b2c: Number(a.sales_price_b2c),
       sales_price_b2b: Number(a.sales_price_b2b),
       vat_rate: Number(a.vat_rate),
       minimum_stock: a.minimum_stock,
       barcode: a.barcode || '',
+      compatible_model_ids: (a.compatible_model_ids || []).map((id: any) => String(id)),
     })
     setShowForm(true)
+  }
+
+  // Lagerorte-Verwaltung
+  const openLocModal = () => {
+    setLocForm({ name: '', description: '' })
+    setLocEditing(null)
+    setLocError('')
+    setShowLocModal(true)
+  }
+
+  const openLocEdit = (loc: any) => {
+    setLocEditing(loc)
+    setLocForm({ name: loc.name, description: loc.description || '' })
+    setLocError('')
+  }
+
+  const handleLocSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!locForm.name.trim()) return
+    setLocSubmitting(true)
+    setLocError('')
+    try {
+      if (locEditing) {
+        await storageLocationsApi.update(locEditing.id, {
+          name: locForm.name.trim(),
+          description: locForm.description || undefined,
+        })
+      } else {
+        await storageLocationsApi.create({
+          name: locForm.name.trim(),
+          description: locForm.description || undefined,
+        })
+      }
+      await loadStorageLocations()
+      setLocForm({ name: '', description: '' })
+      setLocEditing(null)
+    } catch (err) {
+      setLocError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setLocSubmitting(false)
+    }
+  }
+
+  const handleLocDelete = async (loc: any) => {
+    if (!confirm(`Lagerort "${loc.name}" wirklich löschen?`)) return
+    try {
+      await storageLocationsApi.delete(loc.id)
+      await loadStorageLocations()
+      if (form.storage_location_id === loc.id) setForm((f) => ({ ...f, storage_location_id: '' }))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const getStorageLocationName = (id: string | null) => {
+    if (!id) return '–'
+    return storageLocations.find((l) => l.id === id)?.name || '–'
+  }
+
+  // Kategorien-Verwaltung
+  const openCatModal = () => {
+    setCatForm({ name: '', description: '' })
+    setCatEditing(null)
+    setCatError('')
+    setShowCatModal(true)
+  }
+
+  const openCatEdit = (cat: any) => {
+    setCatEditing(cat)
+    setCatForm({ name: cat.name, description: cat.description || '' })
+    setCatError('')
+  }
+
+  const handleCatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!catForm.name.trim()) return
+    setCatSubmitting(true)
+    setCatError('')
+    try {
+      if (catEditing) {
+        await articleCategoriesApi.update(catEditing.id, {
+          name: catForm.name.trim(),
+          description: catForm.description || undefined,
+        })
+      } else {
+        await articleCategoriesApi.create({
+          name: catForm.name.trim(),
+          description: catForm.description || undefined,
+        })
+      }
+      await loadCategories()
+      setCatForm({ name: '', description: '' })
+      setCatEditing(null)
+    } catch (err) {
+      setCatError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setCatSubmitting(false)
+    }
+  }
+
+  const handleCatDelete = async (cat: any) => {
+    if (!confirm(`Kategorie "${cat.name}" wirklich löschen?`)) return
+    try {
+      await articleCategoriesApi.delete(cat.id)
+      await loadCategories()
+      if (categoryFilter === cat.id) setCategoryFilter('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
   }
 
   return (
@@ -133,6 +332,16 @@ export default function Articles() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); setBarcodeFilter('') }}
         />
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="select"
+        >
+          <option value="">Alle Kategorien</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
         <input
           type="text"
           placeholder="Barcode (Enter)"
@@ -153,6 +362,8 @@ export default function Articles() {
         <button type="button" onClick={() => setScanModalOpen(true)} className="btn-secondary">
           Kamera scannen
         </button>
+        <button type="button" onClick={openLocModal} className="btn-secondary">Lagerorte</button>
+        <button type="button" onClick={openCatModal} className="btn-secondary">Kategorien</button>
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">+ Neuer Artikel</button>
       </div>
       <BarcodeScanner
@@ -161,6 +372,7 @@ export default function Articles() {
         onClose={() => setScanModalOpen(false)}
       />
 
+      {/* Artikel-Formular */}
       {showForm && (
         <div className="modal-overlay" onClick={() => { setShowForm(false); resetForm() }}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
@@ -179,6 +391,35 @@ export default function Articles() {
               <div className="form-group">
                 <label>Bezeichnung *</label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Kategorie</label>
+                  <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+                    <option value="">– Keine Kategorie –</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Lieferant</label>
+                  <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
+                    <option value="">– Kein Lieferant –</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Lagerort</label>
+                <select value={form.storage_location_id} onChange={(e) => setForm({ ...form, storage_location_id: e.target.value })}>
+                  <option value="">– Kein Lagerort –</option>
+                  {storageLocations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Beschreibung</label>
@@ -208,12 +449,155 @@ export default function Articles() {
                   <input type="number" value={form.minimum_stock} onChange={(e) => setForm({ ...form, minimum_stock: parseInt(e.target.value, 10) || 0 })} min="0" />
                 </div>
               </div>
+              {/* Kompatible Fahrzeugmodelle */}
+              {allModels.length > 0 && (
+                <div className="form-group">
+                  <label>Kompatible Fahrzeugmodelle (optional)</label>
+                  <div style={{
+                    maxHeight: 180,
+                    overflowY: 'auto',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 6,
+                    padding: '0.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem',
+                  }}>
+                    {manufacturers
+                      .filter((m) => allModels.some((mod) => mod.manufacturer_id === m.id))
+                      .map((m) => (
+                        <div key={m.id}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>{m.name}</div>
+                          {allModels.filter((mod) => mod.manufacturer_id === m.id).map((mod) => (
+                            <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.1rem 0.25rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                              <input
+                                type="checkbox"
+                                checked={form.compatible_model_ids.includes(mod.id)}
+                                onChange={() => toggleModel(mod.id)}
+                              />
+                              {mod.name}{mod.variant ? ` (${mod.variant})` : ''}
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                  </div>
+                  {form.compatible_model_ids.length > 0 && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+                      {form.compatible_model_ids.length} Modell{form.compatible_model_ids.length !== 1 ? 'e' : ''} ausgewählt
+                    </p>
+                  )}
+                </div>
+              )}
               {error && <p className="error">{error}</p>}
               <div className="form-actions">
                 <button type="button" onClick={() => { setShowForm(false); resetForm() }} className="btn-secondary">Abbrechen</button>
                 <button type="submit" disabled={submitting} className="btn-primary">{submitting ? 'Speichern...' : (editing ? 'Speichern' : 'Anlegen')}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Lagerorte-Verwaltung */}
+      {showLocModal && (
+        <div className="modal-overlay" onClick={() => setShowLocModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Lagerorte verwalten</h2>
+            <form onSubmit={handleLocSubmit} style={{ marginBottom: '1rem' }}>
+              <div className="form-group">
+                <label>{locEditing ? 'Lagerort bearbeiten' : 'Neuer Lagerort'}</label>
+                <input
+                  value={locForm.name}
+                  onChange={(e) => setLocForm({ ...locForm, name: e.target.value })}
+                  placeholder="Name *"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  value={locForm.description}
+                  onChange={(e) => setLocForm({ ...locForm, description: e.target.value })}
+                  placeholder="Beschreibung (optional)"
+                />
+              </div>
+              {locError && <p className="error">{locError}</p>}
+              <div className="form-actions">
+                {locEditing && (
+                  <button type="button" onClick={() => { setLocEditing(null); setLocForm({ name: '', description: '' }) }} className="btn-secondary">Abbrechen</button>
+                )}
+                <button type="submit" disabled={locSubmitting} className="btn-primary">
+                  {locSubmitting ? 'Speichern...' : (locEditing ? 'Speichern' : 'Hinzufügen')}
+                </button>
+              </div>
+            </form>
+            {storageLocations.length === 0 ? (
+              <p>Noch keine Lagerorte vorhanden.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {storageLocations.map((l) => (
+                  <li key={l.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <span style={{ flex: 1 }}><strong>{l.name}</strong>{l.description && <span style={{ color: 'var(--color-text-muted)' }}> – {l.description}</span>}</span>
+                    <button type="button" onClick={() => openLocEdit(l)} className="btn-secondary btn-sm">Bearbeiten</button>
+                    <button type="button" onClick={() => handleLocDelete(l)} className="btn-secondary btn-sm">Löschen</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setShowLocModal(false)} className="btn-secondary">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kategorien-Verwaltung */}
+      {showCatModal && (
+        <div className="modal-overlay" onClick={() => setShowCatModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Kategorien verwalten</h2>
+            <form onSubmit={handleCatSubmit} style={{ marginBottom: '1rem' }}>
+              <div className="form-group">
+                <label>{catEditing ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</label>
+                <input
+                  value={catForm.name}
+                  onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+                  placeholder="Name *"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  value={catForm.description}
+                  onChange={(e) => setCatForm({ ...catForm, description: e.target.value })}
+                  placeholder="Beschreibung (optional)"
+                />
+              </div>
+              {catError && <p className="error">{catError}</p>}
+              <div className="form-actions">
+                {catEditing && (
+                  <button type="button" onClick={() => { setCatEditing(null); setCatForm({ name: '', description: '' }) }} className="btn-secondary">Abbrechen</button>
+                )}
+                <button type="submit" disabled={catSubmitting} className="btn-primary">
+                  {catSubmitting ? 'Speichern...' : (catEditing ? 'Speichern' : 'Hinzufügen')}
+                </button>
+              </div>
+            </form>
+            {categories.length === 0 ? (
+              <p>Noch keine Kategorien vorhanden.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {categories.map((c) => (
+                  <li key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <span style={{ flex: 1 }}><strong>{c.name}</strong>{c.description && <span style={{ color: 'var(--color-text-muted)' }}> – {c.description}</span>}</span>
+                    <button type="button" onClick={() => openCatEdit(c)} className="btn-secondary btn-sm">Bearbeiten</button>
+                    <button type="button" onClick={() => handleCatDelete(c)} className="btn-secondary btn-sm">Löschen</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => setShowCatModal(false)} className="btn-secondary">Schließen</button>
+            </div>
           </div>
         </div>
       )}
@@ -227,10 +611,13 @@ export default function Articles() {
             <tr>
               <th>Art.-Nr.</th>
               <th>Name</th>
+              <th>Kategorie</th>
+              <th>Lagerort</th>
               <th>Barcode</th>
               <th>Bestand</th>
-              <th>Mindestbestand</th>
+              <th>EK</th>
               <th>VK B2C</th>
+              <th>Kompatible Modelle</th>
               <th>Aktionen</th>
             </tr>
           </thead>
@@ -239,10 +626,21 @@ export default function Articles() {
               <tr key={a.id} className={a.minimum_stock > 0 && a.stock_quantity < a.minimum_stock ? 'warning-row' : ''}>
                 <td>{a.article_number}</td>
                 <td>{a.name}</td>
+                <td>{getCategoryName(a.category_id)}</td>
+                <td>{getStorageLocationName(a.storage_location_id)}</td>
                 <td>{a.barcode || '–'}</td>
                 <td>{a.stock_quantity}</td>
-                <td>{a.minimum_stock}</td>
+                <td>{Number(a.purchase_price).toFixed(2)} €</td>
                 <td>{Number(a.sales_price_b2c).toFixed(2)} €</td>
+                <td style={{ fontSize: '0.8rem' }}>
+                  {(a.compatible_model_ids || []).length === 0
+                    ? '–'
+                    : allModels
+                        .filter((m) => (a.compatible_model_ids || []).includes(m.id))
+                        .map((m) => `${m.manufacturer_name} ${m.name}`)
+                        .join(', ') || `${(a.compatible_model_ids || []).length} Modelle`
+                  }
+                </td>
                 <td>
                   <button type="button" onClick={() => openEdit(a)} className="btn-secondary btn-sm">Bearbeiten</button>
                   <button type="button" onClick={() => handleDelete(a)} className="btn-secondary btn-sm">Löschen</button>
@@ -251,6 +649,13 @@ export default function Articles() {
             ))}
           </tbody>
         </table>
+        {hasMore && (
+          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+            <button type="button" onClick={handleLoadMore} disabled={loadingMore} className="btn-secondary">
+              {loadingMore ? 'Laden...' : `Weitere laden (${articles.length} geladen)`}
+            </button>
+          </div>
+        )}
         </div>
       )}
     </div>

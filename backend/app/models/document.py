@@ -35,11 +35,24 @@ class Document(BaseModel):
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # OCR-Vorschlag: automatisch erkannter Kunde / Fahrzeug (muss noch manuell bestätigt werden)
+    ocr_customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    ocr_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    customer = relationship("Customer", back_populates="documents")
-    vehicle = relationship("Vehicle", back_populates="documents")
+    customer = relationship("Customer", back_populates="documents", foreign_keys=[customer_id])
+    vehicle = relationship("Vehicle", back_populates="documents", foreign_keys=[vehicle_id])
+    ocr_customer = relationship("Customer", foreign_keys=[ocr_customer_id])
+    ocr_vehicle = relationship("Vehicle", foreign_keys=[ocr_vehicle_id])

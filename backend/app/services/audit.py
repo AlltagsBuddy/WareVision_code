@@ -16,8 +16,10 @@ def log_audit(
     action: str,
     old_values: dict | None = None,
     new_values: dict | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> None:
-    """Log an audit event."""
+    """Audit-Ereignis protokollieren (GoBD/DSGVO-konform)."""
     entry = AuditLog(
         user_id=user_id,
         entity_type=entity_type,
@@ -25,5 +27,7 @@ def log_audit(
         action=action,
         old_values=old_values,
         new_values=new_values,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     db.add(entry)

@@ -24,6 +24,9 @@ export default function Documents() {
   const [loading, setLoading] = useState(true)
   const [customerFilter, setCustomerFilter] = useState<string>('')
   const [vehicleFilter, setVehicleFilter] = useState<string>('')
+  const [search, setSearch] = useState('')
+  const [sortField, setSortField] = useState('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [assignModal, setAssignModal] = useState<{ doc: any } | null>(null)
@@ -242,27 +245,73 @@ export default function Documents() {
   const handleAssign = async () => {
     if (!assignModal) return
     try {
-      await documentsApi.update(assignModal.doc.id, {
+      const updated = await documentsApi.update(assignModal.doc.id, {
         customer_id: assignForm.customer_id || undefined,
         vehicle_id: assignForm.vehicle_id || undefined,
       })
-      setDocuments((prev) =>
-        prev.map((d) =>
-          d.id === assignModal.doc.id
-            ? { ...d, customer_id: assignForm.customer_id || null, vehicle_id: assignForm.vehicle_id || null }
-            : d
-        )
-      )
+      setDocuments((prev) => prev.map((d) => (d.id === assignModal.doc.id ? updated : d)))
       setAssignModal(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
   }
 
+  const handleApplyOcr = async (doc: any, field: 'customer' | 'vehicle' | 'all' = 'all') => {
+    try {
+      const payload: { customer_id?: string; vehicle_id?: string } = {}
+      if ((field === 'customer' || field === 'all') && doc.ocr_customer_id) {
+        payload.customer_id = doc.ocr_customer_id
+      }
+      if ((field === 'vehicle' || field === 'all') && doc.ocr_vehicle_id) {
+        payload.vehicle_id = doc.ocr_vehicle_id
+      }
+      await documentsApi.update(doc.id, payload)
+      const refreshed = await documentsApi.list({
+        customer_id: customerFilter || undefined,
+        vehicle_id: vehicleFilter || undefined,
+      })
+      setDocuments(refreshed)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleSort = (field: string) => {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortField(field); setSortDir('asc') }
+  }
+  const sortIcon = (field: string) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕'
+
+  const q = search.toLowerCase()
+  const displayed = [...documents]
+    .filter((d) =>
+      !q ||
+      (d.filename || '').toLowerCase().includes(q) ||
+      getCustomerName(d.customer_id).toLowerCase().includes(q)
+    )
+    .sort((a, b) => {
+      let va = '', vb = ''
+      if (sortField === 'filename') { va = a.filename || ''; vb = b.filename || '' }
+      else if (sortField === 'customer') { va = getCustomerName(a.customer_id); vb = getCustomerName(b.customer_id) }
+      else if (sortField === 'file_size') {
+        return sortDir === 'asc'
+          ? Number(a.file_size) - Number(b.file_size)
+          : Number(b.file_size) - Number(a.file_size)
+      }
+      else { va = a.created_at || ''; vb = b.created_at || '' }
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
+
   return (
     <div className="page">
       <h1>Dokumente</h1>
       <div className="toolbar">
+        <input
+          type="search"
+          placeholder="Dateiname, Kunde..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <select
           value={customerFilter}
           onChange={(e) => setCustomerFilter(e.target.value)}
@@ -470,26 +519,60 @@ export default function Documents() {
         <table className="table">
           <thead>
             <tr>
-              <th>Dateiname</th>
-              <th>Größe</th>
-              <th>Kunde</th>
+              <th onClick={() => handleSort('filename')} style={{ cursor: 'pointer' }}>Dateiname{sortIcon('filename')}</th>
+              <th onClick={() => handleSort('file_size')} style={{ cursor: 'pointer' }}>Größe{sortIcon('file_size')}</th>
+              <th onClick={() => handleSort('customer')} style={{ cursor: 'pointer' }}>Kunde{sortIcon('customer')}</th>
               <th>Fahrzeug</th>
-              <th>Hochgeladen</th>
+              <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer' }}>Hochgeladen{sortIcon('created_at')}</th>
               <th>Aktionen</th>
             </tr>
           </thead>
           <tbody>
-            {documents.length === 0 ? (
+            {displayed.length === 0 ? (
               <tr>
-                <td colSpan={6}>Keine Dokumente. Klicken Sie auf „Hochladen“, um Dateien hinzuzufügen.</td>
+                <td colSpan={6}>Keine Dokumente. Klicken Sie auf „Hochladen”, um Dateien hinzuzufügen.</td>
               </tr>
             ) : (
-              documents.map((doc) => (
+              displayed.map((doc) => (
                 <tr key={doc.id}>
                   <td>{doc.filename}</td>
                   <td>{formatSize(doc.file_size)}</td>
-                  <td>{getCustomerName(doc.customer_id)}</td>
-                  <td>{getVehicleLabel(doc.vehicle_id)}</td>
+                  <td>
+                    {getCustomerName(doc.customer_id)}
+                    {!doc.customer_id && doc.ocr_customer_id && (
+                      <div style={{ marginTop: 2 }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                          OCR: {doc.ocr_customer_name}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          style={{ marginLeft: '0.4rem', fontSize: '0.72rem', padding: '1px 6px' }}
+                          onClick={() => handleApplyOcr(doc, 'customer')}
+                        >
+                          Übernehmen
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {getVehicleLabel(doc.vehicle_id)}
+                    {!doc.vehicle_id && doc.ocr_vehicle_id && (
+                      <div style={{ marginTop: 2 }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                          OCR: {doc.ocr_vehicle_label}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          style={{ marginLeft: '0.4rem', fontSize: '0.72rem', padding: '1px 6px' }}
+                          onClick={() => handleApplyOcr(doc, 'vehicle')}
+                        >
+                          Übernehmen
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td>{formatDate(doc.created_at)}</td>
                   <td>
                     {(isImageDoc(doc.filename, doc.content_type) || isPdfDoc(doc.filename, doc.content_type)) && (

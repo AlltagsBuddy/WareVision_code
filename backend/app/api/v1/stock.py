@@ -59,7 +59,8 @@ def create_stock_movement(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> StockMovement:
     """Create stock movement (Wareneingang, Warenausgang, Korrektur)."""
-    article = db.query(Article).filter(Article.id == payload.article_id).first()
+    # FOR UPDATE sperrt den Datensatz für gleichzeitige Buchungen (verhindert Race Conditions)
+    article = db.query(Article).filter(Article.id == payload.article_id).with_for_update().first()
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -96,7 +97,14 @@ def create_stock_movement(
     )
     db.add(movement)
     article.stock_quantity = new_stock
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lagerbewegung konnte nicht gespeichert werden",
+        )
     db.refresh(movement)
     return movement
 
@@ -105,30 +113,47 @@ def create_stock_movement(
 def list_low_stock(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
 ) -> list[dict]:
-    """List articles below minimum stock (Mindestbestand Warnung)."""
-    articles = (
-        db.query(Article)
+    """Artikel unter Mindestbestand – Reservierungen werden per JOIN in einer Abfrage geladen."""
+    # Reservierte Mengen aller Artikel in einer Abfrage aggregieren
+    reserved_subq = (
+        db.query(
+            StockReservation.article_id,
+            func.coalesce(func.sum(StockReservation.quantity), 0).label("reserved"),
+        )
+        .filter(StockReservation.status == "active")
+        .group_by(StockReservation.article_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(Article, func.coalesce(reserved_subq.c.reserved, 0).label("reserved"))
+        .outerjoin(reserved_subq, Article.id == reserved_subq.c.article_id)
         .filter(
             Article.is_active == True,
             Article.minimum_stock > 0,
             Article.stock_quantity < Article.minimum_stock,
         )
+        .order_by(Article.name)
+        .offset(skip)
+        .limit(limit)
         .all()
     )
-    result = []
-    for a in articles:
-        reserved = _get_reserved_quantity(db, a.id)
-        result.append({
+
+    return [
+        {
             "id": str(a.id),
             "article_number": a.article_number,
             "name": a.name,
             "stock_quantity": a.stock_quantity,
-            "reserved_quantity": reserved,
-            "available_quantity": a.stock_quantity - reserved,
+            "reserved_quantity": int(reserved),
+            "available_quantity": a.stock_quantity - int(reserved),
             "minimum_stock": a.minimum_stock,
-        })
-    return result
+        }
+        for a, reserved in rows
+    ]
 
 
 # --- Stock Reservations ---

@@ -53,6 +53,8 @@ class ExternalAppointmentImport(BaseModel):
     vehicle_vin: str | None = None
     title: str | None = None
     description: str | None = None
+    appointment_type: str | None = None
+    """Optional: workshop | test_drive oder freier Text (z. B. „Probefahrt“) zur automatischen Zuordnung."""
 
 
 class AppointmentRead(BaseModel):
@@ -74,6 +76,8 @@ class AppointmentRead(BaseModel):
     customer_last_name: Optional[str] = None
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
+    # Nur bei POST /appointments: Hinweis, ob Terminbestätigung per E-Mail ging (sonst None)
+    email_benachrichtigung: Optional[str] = None
 
     class Config:
         from_attributes = True

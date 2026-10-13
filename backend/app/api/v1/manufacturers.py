@@ -24,9 +24,15 @@ router = APIRouter(prefix="/manufacturers", tags=["manufacturers"])
 def list_manufacturers(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+    search: str | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
 ) -> list[Manufacturer]:
-    """List manufacturers."""
-    return db.query(Manufacturer).order_by(Manufacturer.name).all()
+    """Liste aller Hersteller, optional mit Suchfilter und Pagination."""
+    query = db.query(Manufacturer)
+    if search:
+        query = query.filter(Manufacturer.name.ilike(f"%{search}%"))
+    return query.order_by(Manufacturer.name).offset(skip).limit(limit).all()
 
 
 @router.post("", response_model=ManufacturerRead, status_code=status.HTTP_201_CREATED)

@@ -20,6 +20,7 @@ def list_vehicles(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
     customer_id: UUID | None = None,
+    include_inactive: bool = Query(False, description="Deaktivierte Fahrzeuge einschließen"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> list[Vehicle]:
@@ -27,6 +28,8 @@ def list_vehicles(
     query = db.query(Vehicle)
     if customer_id:
         query = query.filter(Vehicle.customer_id == customer_id)
+    if not include_inactive:
+        query = query.filter(Vehicle.is_active == True)
     return query.offset(skip).limit(limit).all()
 
 
@@ -51,6 +54,9 @@ def create_vehicle(
         engine_variant=payload.engine_variant,
         color=payload.color,
         notes=payload.notes,
+        purchase_price=payload.purchase_price,
+        sale_price=payload.sale_price,
+        storage_location_id=payload.storage_location_id,
     )
     db.add(vehicle)
     db.commit()
@@ -102,12 +108,12 @@ def delete_vehicle(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
-    """Delete vehicle."""
+    """Soft-Delete: Fahrzeug deaktivieren statt löschen."""
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fahrzeug nicht gefunden",
         )
-    db.delete(vehicle)
+    vehicle.is_active = False
     db.commit()

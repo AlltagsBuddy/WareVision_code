@@ -28,6 +28,11 @@ export default function Stock() {
   const [barcodeError, setBarcodeError] = useState('')
   const [scanModalOpen, setScanModalOpen] = useState(false)
 
+  const [movementSearch, setMovementSearch] = useState('')
+  const [movementSortField, setMovementSortField] = useState('created_at')
+  const [movementSortDir, setMovementSortDir] = useState<'asc' | 'desc'>('desc')
+  const [lowStockSearch, setLowStockSearch] = useState('')
+
   const [reservations, setReservations] = useState<any[]>([])
   const [showReservationForm, setShowReservationForm] = useState(false)
   const [reservationForm, setReservationForm] = useState({
@@ -169,6 +174,37 @@ export default function Stock() {
       return '–'
     }
   }
+
+  const handleMovementSort = (field: string) => {
+    if (movementSortField === field) setMovementSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setMovementSortField(field); setMovementSortDir('asc') }
+  }
+  const movSortIcon = (field: string) => movementSortField === field ? (movementSortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕'
+
+  const mq = movementSearch.toLowerCase()
+  const displayedMovements = [...movements]
+    .filter((m) => {
+      if (!mq) return true
+      const a = articles.find((x: any) => x.id === m.article_id)
+      return (
+        (a?.article_number || '').toLowerCase().includes(mq) ||
+        (a?.name || '').toLowerCase().includes(mq)
+      )
+    })
+    .sort((a, b) => {
+      let va = '', vb = ''
+      if (movementSortField === 'article') { va = getArticleName(a.article_id); vb = getArticleName(b.article_id) }
+      else if (movementSortField === 'movement_type') { va = a.movement_type || ''; vb = b.movement_type || '' }
+      else { va = a.created_at || ''; vb = b.created_at || '' }
+      return movementSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
+
+  const lq = lowStockSearch.toLowerCase()
+  const displayedLowStock = lowStock.filter((a) =>
+    !lq ||
+    (a.article_number || '').toLowerCase().includes(lq) ||
+    (a.name || '').toLowerCase().includes(lq)
+  )
 
   return (
     <div className="page">
@@ -324,6 +360,14 @@ export default function Stock() {
       )}
 
       <h2>Mindestbestand (Warnung)</h2>
+      <div className="toolbar" style={{ marginBottom: '0.5rem' }}>
+        <input
+          type="search"
+          placeholder="Artikelnummer, Name..."
+          value={lowStockSearch}
+          onChange={(e) => setLowStockSearch(e.target.value)}
+        />
+      </div>
       {loading ? (
         <p>Laden...</p>
       ) : lowStock.length === 0 ? (
@@ -342,7 +386,7 @@ export default function Stock() {
             </tr>
           </thead>
           <tbody>
-            {lowStock.map((a) => (
+            {displayedLowStock.map((a) => (
               <tr key={a.id} className="warning-row">
                 <td>{a.article_number}</td>
                 <td>{a.name}</td>
@@ -404,6 +448,14 @@ export default function Stock() {
       )}
 
       <h2>Letzte Lagerbewegungen</h2>
+      <div className="toolbar" style={{ marginBottom: '0.5rem' }}>
+        <input
+          type="search"
+          placeholder="Artikelnummer, Name..."
+          value={movementSearch}
+          onChange={(e) => setMovementSearch(e.target.value)}
+        />
+      </div>
       {loading ? (
         <p>Laden...</p>
       ) : movements.length === 0 ? (
@@ -413,15 +465,15 @@ export default function Stock() {
         <table className="table">
           <thead>
             <tr>
-              <th>Datum</th>
-              <th>Artikel</th>
-              <th>Typ</th>
+              <th onClick={() => handleMovementSort('created_at')} style={{ cursor: 'pointer' }}>Datum{movSortIcon('created_at')}</th>
+              <th onClick={() => handleMovementSort('article')} style={{ cursor: 'pointer' }}>Artikel{movSortIcon('article')}</th>
+              <th onClick={() => handleMovementSort('movement_type')} style={{ cursor: 'pointer' }}>Typ{movSortIcon('movement_type')}</th>
               <th>Menge</th>
               <th>Notiz</th>
             </tr>
           </thead>
           <tbody>
-            {movements.map((m) => (
+            {displayedMovements.map((m) => (
               <tr key={m.id}>
                 <td>{formatDate(m.created_at)}</td>
                 <td>{getArticleName(m.article_id)}</td>

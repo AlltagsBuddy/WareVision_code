@@ -32,8 +32,21 @@ class Invoice(BaseModel):
         ForeignKey("workshop_orders.id"),
         nullable=True,
     )
+    # GoBD: Stornorechnung referenziert die ursprüngliche Rechnung
+    cancellation_of_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("invoices.id"),
+        nullable=True,
+    )
+    cancellation_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("invoices.id"),
+        nullable=True,
+    )
     invoice_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     invoice_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Leistungsdatum (Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG)
+    service_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(
         String(30), nullable=False
@@ -56,6 +69,7 @@ class Invoice(BaseModel):
 
     customer = relationship("Customer", back_populates="invoices")
     workshop_order = relationship("WorkshopOrder", back_populates="invoices")
+    cancellation_of = relationship("Invoice", foreign_keys=[cancellation_of_id], remote_side="Invoice.id", backref="cancellation_invoice_rel")
     items = relationship(
         "InvoiceItem",
         back_populates="invoice",

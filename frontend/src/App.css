@@ -23,9 +23,26 @@
 }
 
 .logo {
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.brand-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.brand-logo--header {
+  height: 40px;
+  width: auto;
+}
+
+.brand-logo--auth {
+  height: 140px;
+  width: auto;
+  margin: 0 auto 1rem;
 }
 
 .nav {

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import { useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -10,13 +11,16 @@ import Vehicles from './pages/Vehicles'
 import Articles from './pages/Articles'
 import Stock from './pages/Stock'
 import WorkshopOrders from './pages/WorkshopOrders'
+import Quotes from './pages/Quotes'
 import Appointments from './pages/Appointments'
 import Invoices from './pages/Invoices'
 import Documents from './pages/Documents'
 import MaintenancePlans from './pages/MaintenancePlans'
+import Suppliers from './pages/Suppliers'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import AuditLogs from './pages/AuditLogs'
+import Accounting from './pages/Accounting'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
@@ -27,6 +31,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -42,7 +47,9 @@ export default function App() {
         <Route path="customers" element={<Customers />} />
         <Route path="vehicles" element={<Vehicles />} />
         <Route path="articles" element={<Articles />} />
+        <Route path="suppliers" element={<Suppliers />} />
         <Route path="stock" element={<Stock />} />
+        <Route path="quotes" element={<Quotes />} />
         <Route path="workshop-orders" element={<WorkshopOrders />} />
         <Route path="appointments" element={<Appointments />} />
         <Route path="invoices" element={<Invoices />} />
@@ -51,8 +58,10 @@ export default function App() {
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
         <Route path="audit-logs" element={<AuditLogs />} />
+        <Route path="accounting" element={<Accounting />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ErrorBoundary>
   )
 }

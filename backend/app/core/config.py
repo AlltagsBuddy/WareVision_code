@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Uploads
     UPLOAD_DIR: str = "uploads"
 
+    # Monitoring
+    SENTRY_DSN: str = ""  # leer = Sentry deaktiviert
+    SENTRY_ENVIRONMENT: str = "production"
+
     @computed_field
     @property
     def cors_origins_resolved(self) -> list[str]:

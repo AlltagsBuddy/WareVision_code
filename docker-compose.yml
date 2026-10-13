@@ -15,20 +15,60 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://warevision:warevision@postgres:5432/warevision
+      REDIS_URL: redis://redis:6379/0
       SECRET_KEY: dev-secret-key-change-in-production
       UPLOAD_DIR: /app/uploads
-      # Für Tests von anderen Systemen: zusätzliche CORS-Origins (kommagetrennt)
+      # SENTRY_DSN: "https://xxx@sentry.io/yyy"  # Sentry Fehler-Tracking (optional)
       # CORS_ORIGINS_EXTRA: "http://192.168.1.100:5173,https://test.warevision.de"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-worker:
+    build: ./backend
+    command: celery -A app.worker.celery_app worker --loglevel=info -Q celery --concurrency=2
+    environment:
+      DATABASE_URL: postgresql://warevision:warevision@postgres:5432/warevision
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build: ./backend
+    command: celery -A app.worker.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://warevision:warevision@postgres:5432/warevision
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
         condition: service_healthy
 
   frontend:
@@ -62,3 +102,4 @@ volumes:
   postgres_data:
   uploads_data:
   backup_data:
+  redis_data:

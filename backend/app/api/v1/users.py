@@ -11,12 +11,14 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.models.role import Role
-from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.user import DEFAULT_PERMISSIONS, UserCreate, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
 def _user_to_read(user: User) -> dict:
+    """Benutzer in lesbares Dict umwandeln. Admins erhalten immer alle Rechte."""
+    permissions = user.permissions if user.permissions is not None else DEFAULT_PERMISSIONS.copy()
     return {
         "id": user.id,
         "email": user.email,
@@ -27,6 +29,7 @@ def _user_to_read(user: User) -> dict:
         "is_active": user.is_active,
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
+        "permissions": permissions,
     }
 
 
@@ -75,6 +78,7 @@ def create_user(
         last_name=payload.last_name,
         email=payload.email.lower(),
         password_hash=get_password_hash(payload.password),
+        permissions=payload.permissions if payload.permissions is not None else DEFAULT_PERMISSIONS.copy(),
     )
     db.add(user)
     db.commit()
@@ -107,6 +111,10 @@ def update_user(
                     detail="Benutzer mit dieser E-Mail existiert bereits",
                 )
             user.email = new_email
+    if "role_id" in data:
+        role = db.query(Role).filter(Role.id == data["role_id"]).first()
+        if not role:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rolle nicht gefunden")
     for key, value in data.items():
         setattr(user, key, value)
     db.commit()

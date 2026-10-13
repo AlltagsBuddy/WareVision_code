@@ -33,8 +33,10 @@ class CustomerCreate(BaseModel):
 
     customer_type: str = Field(..., pattern="^(B2B|B2C)$")
     company_name: Optional[str] = None
+    salutation: Optional[str] = Field(None, pattern="^(Herr|Frau|Divers|keine)?$")
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    contact_position: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     vat_id: Optional[str] = None
@@ -46,8 +48,10 @@ class CustomerUpdate(BaseModel):
 
     customer_type: Optional[str] = Field(None, pattern="^(B2B|B2C)$")
     company_name: Optional[str] = None
+    salutation: Optional[str] = Field(None, pattern="^(Herr|Frau|Divers|keine)?$")
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    contact_position: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     vat_id: Optional[str] = None
@@ -61,8 +65,10 @@ class CustomerRead(BaseModel):
     id: UUID
     customer_type: str
     company_name: Optional[str] = None
+    salutation: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    contact_position: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     vat_id: Optional[str] = None

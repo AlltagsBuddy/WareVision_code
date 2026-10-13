@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { settingsApi } from '../api/client'
+import { settingsApi, tasksApi, healthApi, laborRatesApi } from '../api/client'
 
 export default function Settings() {
   const { user } = useAuth()
   const [terminMarktplatzConfigured, setTerminMarktplatzConfigured] = useState(false)
+  const [resendConfigured, setResendConfigured] = useState(false)
   const [form, setForm] = useState({
     company_name: '',
     company_address: '',
@@ -17,6 +18,7 @@ export default function Settings() {
     company_bank_iban: '',
     company_bank_bic: '',
     company_bank_account_holder: '',
+    invoice_vat_exemption_note: '',
     smtp_host: '',
     smtp_port: '587',
     smtp_user: '',
@@ -26,17 +28,87 @@ export default function Settings() {
     termin_marktplatz_api_key: '',
     termin_marktplatz_webhook_base_url: '',
     termin_marktplatz_cancel_callback_url: '',
+    resend_api_key: '',
+    resend_from_email: '',
+    resend_from_name: '',
   })
+  const [logoSet, setLogoSet] = useState(false)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState('')
+  const logoInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [testEmailAddr, setTestEmailAddr] = useState('')
+  const [testEmailSending, setTestEmailSending] = useState(false)
+  const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  // Stundenpreise
+  const [laborRates, setLaborRates] = useState<any[]>([])
+  const [showLaborForm, setShowLaborForm] = useState(false)
+  const [laborForm, setLaborForm] = useState({ name: '', description: '', rate_per_hour: '', is_default: false })
+  const [laborSubmitting, setLaborSubmitting] = useState(false)
+  const [laborError, setLaborError] = useState('')
+  const [editLaborId, setEditLaborId] = useState<string | null>(null)
+
+  useEffect(() => {
+    laborRatesApi.list().then(setLaborRates).catch(() => {})
+  }, [])
+
+  const handleLaborSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!laborForm.name.trim() || !laborForm.rate_per_hour) {
+      setLaborError('Name und Stundenpreis sind erforderlich.')
+      return
+    }
+    setLaborSubmitting(true)
+    setLaborError('')
+    try {
+      const data = {
+        name: laborForm.name.trim(),
+        description: laborForm.description || undefined,
+        rate_per_hour: parseFloat(laborForm.rate_per_hour),
+        is_default: laborForm.is_default,
+      }
+      if (editLaborId) {
+        await laborRatesApi.update(editLaborId, data)
+      } else {
+        await laborRatesApi.create(data)
+      }
+      const updated = await laborRatesApi.list()
+      setLaborRates(updated)
+      setShowLaborForm(false)
+      setEditLaborId(null)
+      setLaborForm({ name: '', description: '', rate_per_hour: '', is_default: false })
+    } catch (err) {
+      setLaborError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setLaborSubmitting(false)
+    }
+  }
+
+  const openEditLabor = (r: any) => {
+    setEditLaborId(r.id)
+    setLaborForm({ name: r.name, description: r.description || '', rate_per_hour: String(Number(r.rate_per_hour)), is_default: r.is_default })
+    setLaborError('')
+    setShowLaborForm(true)
+  }
+
+  const handleDeleteLabor = async (id: string) => {
+    if (!confirm('Stundenpreis wirklich löschen?')) return
+    await laborRatesApi.delete(id)
+    setLaborRates((prev) => prev.filter((r) => r.id !== id))
+  }
 
   useEffect(() => {
     settingsApi
       .get()
-      .then((data: { termin_marktplatz_configured?: boolean } & Record<string, string>) => {
+      .then((data) => {
         setTerminMarktplatzConfigured(!!data.termin_marktplatz_configured)
+        setResendConfigured(!!data.resend_configured)
+        setLogoSet(!!data.company_logo_set)
         setForm({
           company_name: data.company_name || '',
           company_address: data.company_address || '',
@@ -48,6 +120,7 @@ export default function Settings() {
           company_bank_iban: data.company_bank_iban || '',
           company_bank_bic: data.company_bank_bic || '',
           company_bank_account_holder: data.company_bank_account_holder || '',
+          invoice_vat_exemption_note: data.invoice_vat_exemption_note || '',
           smtp_host: data.smtp_host || '',
           smtp_port: data.smtp_port || '587',
           smtp_user: data.smtp_user || '',
@@ -57,6 +130,9 @@ export default function Settings() {
           termin_marktplatz_api_key: '',
           termin_marktplatz_webhook_base_url: data.termin_marktplatz_webhook_base_url || '',
           termin_marktplatz_cancel_callback_url: data.termin_marktplatz_cancel_callback_url || '',
+          resend_api_key: '',
+          resend_from_email: data.resend_from_email || '',
+          resend_from_name: data.resend_from_name || '',
         })
       })
       .catch(() => setError('Einstellungen konnten nicht geladen werden.'))
@@ -80,6 +156,7 @@ export default function Settings() {
         company_bank_iban: form.company_bank_iban,
         company_bank_bic: form.company_bank_bic,
         company_bank_account_holder: form.company_bank_account_holder,
+        invoice_vat_exemption_note: form.invoice_vat_exemption_note,
         smtp_host: form.smtp_host,
         smtp_port: form.smtp_port,
         smtp_user: form.smtp_user,
@@ -89,6 +166,9 @@ export default function Settings() {
         termin_marktplatz_api_key: form.termin_marktplatz_api_key,
         termin_marktplatz_webhook_base_url: form.termin_marktplatz_webhook_base_url || undefined,
         termin_marktplatz_cancel_callback_url: form.termin_marktplatz_cancel_callback_url || undefined,
+        resend_api_key: form.resend_api_key || undefined,
+        resend_from_email: form.resend_from_email || undefined,
+        resend_from_name: form.resend_from_name || undefined,
       })
       setSuccess(true)
     } catch (err) {
@@ -116,6 +196,62 @@ export default function Settings() {
           </Link>
         </div>
       )}
+
+      <div className="card form-card" style={{ maxWidth: 500, marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Stundenpreise</h3>
+          {!showLaborForm && (
+            <button type="button" className="btn-primary btn-sm" onClick={() => { setEditLaborId(null); setLaborForm({ name: '', description: '', rate_per_hour: '', is_default: false }); setLaborError(''); setShowLaborForm(true) }}>
+              + Hinzufügen
+            </button>
+          )}
+        </div>
+        {showLaborForm && (
+          <form onSubmit={handleLaborSubmit} style={{ marginBottom: '1rem', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 6 }}>
+            <h4 style={{ margin: '0 0 0.75rem' }}>{editLaborId ? 'Stundenpreis bearbeiten' : 'Neuer Stundenpreis'}</h4>
+            <div className="form-group">
+              <label>Bezeichnung *</label>
+              <input value={laborForm.name} onChange={(e) => setLaborForm((f) => ({ ...f, name: e.target.value }))} placeholder="z.B. Werkstattarbeit, Diagnose, Elektrik..." required />
+            </div>
+            <div className="form-group">
+              <label>Beschreibung</label>
+              <input value={laborForm.description} onChange={(e) => setLaborForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional" />
+            </div>
+            <div className="form-group">
+              <label>Preis pro Stunde (€) *</label>
+              <input type="number" step="0.01" min="0.01" value={laborForm.rate_per_hour} onChange={(e) => setLaborForm((f) => ({ ...f, rate_per_hour: e.target.value }))} placeholder="z.B. 85.00" required />
+            </div>
+            <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+              <input type="checkbox" id="labor_default" checked={laborForm.is_default} onChange={(e) => setLaborForm((f) => ({ ...f, is_default: e.target.checked }))} style={{ width: 'auto' }} />
+              <label htmlFor="labor_default" style={{ margin: 0 }}>Standard (wird im Auftragsformular vorausgewählt)</label>
+            </div>
+            {laborError && <p className="error">{laborError}</p>}
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={() => { setShowLaborForm(false); setEditLaborId(null) }}>Abbrechen</button>
+              <button type="submit" className="btn-primary" disabled={laborSubmitting}>{laborSubmitting ? 'Speichern...' : 'Speichern'}</button>
+            </div>
+          </form>
+        )}
+        {laborRates.length === 0 ? (
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', margin: 0 }}>Noch keine Stundenpreise angelegt.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {laborRates.map((r) => (
+              <li key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
+                <div style={{ flex: 1 }}>
+                  <strong>{r.name}</strong>
+                  {r.is_default && <span style={{ marginLeft: '0.4rem', fontSize: '0.75rem', background: 'var(--color-primary)', color: '#fff', borderRadius: 3, padding: '1px 5px' }}>Standard</span>}
+                  {!r.is_active && <span style={{ marginLeft: '0.4rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>(inaktiv)</span>}
+                  {r.description && <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{r.description}</div>}
+                  <div style={{ fontSize: '0.85rem', color: 'var(--color-primary)', fontWeight: 600 }}>{Number(r.rate_per_hour).toFixed(2)} €/Std.</div>
+                </div>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => openEditLabor(r)}>Bearbeiten</button>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => handleDeleteLabor(r.id)} style={{ color: 'var(--color-error)' }}>Löschen</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit} className="card form-card" style={{ maxWidth: 500 }}>
         <h3 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '1rem' }}>Firmendaten</h3>
@@ -148,6 +284,51 @@ export default function Settings() {
             onChange={(e) => setForm((f) => ({ ...f, company_vat_id: e.target.value }))}
             placeholder="DE123456789"
           />
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>Firmenlogo (Rechnungen)</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          {logoPreview ? (
+            <img src={logoPreview} alt="Logo-Vorschau" style={{ height: 60, objectFit: 'contain', border: '1px solid var(--color-border)', borderRadius: 6, padding: 4, background: '#fff' }} />
+          ) : logoSet ? (
+            <img src="/api/v1/settings/logo" alt="Aktuelles Logo" style={{ height: 60, objectFit: 'contain', border: '1px solid var(--color-border)', borderRadius: 6, padding: 4, background: '#fff' }} />
+          ) : (
+            <div style={{ height: 60, width: 120, border: '1px dashed var(--color-border)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+              Kein Logo
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setLogoError('')
+                // Lokale Vorschau
+                const previewUrl = URL.createObjectURL(file)
+                setLogoPreview(previewUrl)
+                // Hochladen
+                setLogoUploading(true)
+                try {
+                  await settingsApi.uploadLogo(file)
+                  setLogoSet(true)
+                } catch (err) {
+                  setLogoError(err instanceof Error ? err.message : 'Upload fehlgeschlagen')
+                  setLogoPreview(null)
+                } finally {
+                  setLogoUploading(false)
+                }
+              }}
+            />
+            <button type="button" className="btn-secondary" onClick={() => logoInputRef.current?.click()} disabled={logoUploading}>
+              {logoUploading ? 'Hochladen...' : logoSet || logoPreview ? 'Logo ersetzen' : 'Logo hochladen'}
+            </button>
+            <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>PNG, JPG oder WebP, max. 2 MB</span>
+            {logoError && <span style={{ fontSize: '0.82rem', color: 'var(--color-error)' }}>{logoError}</span>}
+          </div>
         </div>
 
         <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>Kontakt</h3>
@@ -223,6 +404,19 @@ export default function Settings() {
             placeholder="COBADEFFXXX"
           />
         </div>
+        <div className="form-group">
+          <label htmlFor="invoice_vat_exemption_note">Hinweis bei 0 % MwSt (Steuerbefreiung)</label>
+          <textarea
+            id="invoice_vat_exemption_note"
+            rows={2}
+            value={form.invoice_vat_exemption_note}
+            onChange={(e) => setForm((f) => ({ ...f, invoice_vat_exemption_note: e.target.value }))}
+            placeholder="z. B. Durchlaufender Posten (TÜV-Gebühr) – nicht umsatzsteuerbar"
+          />
+          <small style={{ color: 'var(--color-text-muted)' }}>
+            Erscheint auf Rechnungen mit 0-%-Positionen und in der E-Rechnung. Den richtigen Text bitte mit dem Steuerberater abstimmen.
+          </small>
+        </div>
 
         <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>E-Mail-Versand (SMTP)</h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
@@ -289,6 +483,79 @@ export default function Settings() {
             onChange={(e) => setForm((f) => ({ ...f, smtp_from: e.target.value }))}
             placeholder="rechnungen@firma.de (sonst Benutzername)"
           />
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>E-Mail-Versand (Resend)</h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Resend hat Vorrang vor SMTP. Wenn der API-Key gesetzt ist, werden alle E-Mails über Resend versendet.
+          {resendConfigured && <strong style={{ color: 'var(--color-success)', marginLeft: '0.5rem' }}>✓ Resend konfiguriert</strong>}
+        </p>
+        <div className="form-group">
+          <label htmlFor="resend_api_key">API-Key</label>
+          <input
+            id="resend_api_key"
+            type="password"
+            value={form.resend_api_key}
+            onChange={(e) => setForm((f) => ({ ...f, resend_api_key: e.target.value }))}
+            placeholder={resendConfigured ? '(gesetzt – leer lassen = unverändert)' : 're_xxxxxxxxxxxxxxxxxxxx'}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="resend_from_email">Absender-E-Mail</label>
+          <input
+            id="resend_from_email"
+            type="email"
+            value={form.resend_from_email}
+            onChange={(e) => setForm((f) => ({ ...f, resend_from_email: e.target.value }))}
+            placeholder="info@quadparadies-schoner.de"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="resend_from_name">Absender-Name</label>
+          <input
+            id="resend_from_name"
+            type="text"
+            value={form.resend_from_name}
+            onChange={(e) => setForm((f) => ({ ...f, resend_from_name: e.target.value }))}
+            placeholder="Quad Paradies Schoner"
+          />
+        </div>
+
+        <div style={{ marginTop: '1.5rem', padding: '0.75rem', background: 'var(--color-bg)', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+          <strong style={{ fontSize: '0.9rem' }}>E-Mail-Konfiguration testen</strong>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="email"
+              value={testEmailAddr}
+              onChange={(e) => { setTestEmailAddr(e.target.value); setTestEmailResult(null) }}
+              placeholder="empfaenger@beispiel.de (leer = company_email)"
+              style={{ flex: 1, minWidth: 200 }}
+            />
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={testEmailSending}
+              onClick={async () => {
+                setTestEmailSending(true)
+                setTestEmailResult(null)
+                try {
+                  const r = await settingsApi.sendTestEmail(testEmailAddr || undefined)
+                  setTestEmailResult({ ok: true, msg: r.message })
+                } catch (err) {
+                  setTestEmailResult({ ok: false, msg: err instanceof Error ? err.message : 'Fehler' })
+                } finally {
+                  setTestEmailSending(false)
+                }
+              }}
+            >
+              {testEmailSending ? 'Wird gesendet…' : 'Test-E-Mail senden'}
+            </button>
+          </div>
+          {testEmailResult && (
+            <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.85rem', color: testEmailResult.ok ? 'var(--color-success)' : 'var(--color-error)' }}>
+              {testEmailResult.msg}
+            </p>
+          )}
         </div>
 
         <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>Terminmarktplatz</h3>
@@ -384,6 +651,161 @@ export default function Settings() {
           {submitting ? 'Speichern…' : 'Speichern'}
         </button>
       </form>
+
+      {user?.role_name === 'admin' && <SystemStatusPanel />}
+      {user?.role_name === 'admin' && <TasksPanel />}
+    </div>
+  )
+}
+
+function SystemStatusPanel() {
+  const [health, setHealth] = useState<{ status: string; checks: Record<string, string>; timestamp: string } | null>(null)
+  const [checking, setChecking] = useState(false)
+
+  const check = async () => {
+    setChecking(true)
+    try {
+      const h = await healthApi.check()
+      setHealth(h)
+    } catch {
+      setHealth({ status: 'error', checks: { api: 'nicht erreichbar' }, timestamp: new Date().toISOString() })
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const statusColor = (s: string) =>
+    s === 'ok' ? 'var(--color-success, #27ae60)' : s === 'degraded' ? '#e67e22' : 'var(--color-error)'
+
+  return (
+    <div className="card form-card" style={{ maxWidth: 600, marginTop: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <h3 style={{ margin: 0, fontSize: '1rem' }}>System-Status</h3>
+        <button type="button" className="btn-secondary btn-sm" onClick={check} disabled={checking}>
+          {checking ? 'Prüfe…' : 'Jetzt prüfen'}
+        </button>
+      </div>
+      {health ? (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.1rem', color: statusColor(health.status) }}>●</span>
+            <strong style={{ color: statusColor(health.status) }}>
+              {health.status === 'ok' ? 'Alles in Ordnung' : health.status === 'degraded' ? 'Eingeschränkt' : 'Fehler'}
+            </strong>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+              {new Date(health.timestamp).toLocaleString('de-DE')}
+            </span>
+          </div>
+          <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+            <tbody>
+              {Object.entries(health.checks).map(([key, val]) => (
+                <tr key={key}>
+                  <td style={{ padding: '3px 8px 3px 0', fontWeight: 500, textTransform: 'capitalize' }}>{key}</td>
+                  <td style={{ padding: '3px 0', color: val === 'ok' ? statusColor('ok') : statusColor('error') }}>{val}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', margin: 0 }}>
+          Klicken Sie auf „Jetzt prüfen" um DB- und Redis-Verbindung zu testen.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function TasksPanel() {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [runningId, setRunningId] = useState<string | null>(null)
+  const [results, setResults] = useState<Record<string, { status: string; result?: any; error?: string }>>({})
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    tasksApi.list()
+      .then(setTasks)
+      .catch(() => setLoadError('Aufgaben konnten nicht geladen werden (Redis läuft möglicherweise nicht).'))
+  }, [])
+
+  const handleRun = async (taskName: string) => {
+    setRunningId(taskName)
+    try {
+      const { task_id } = await tasksApi.run(taskName)
+      setResults((r) => ({ ...r, [taskName]: { status: 'Gestartet...' } }))
+      // Status bis zu 30s pollen
+      let attempts = 0
+      const poll = async () => {
+        try {
+          const s = await tasksApi.status(task_id)
+          if (s.status === 'SUCCESS') {
+            setResults((r) => ({ ...r, [taskName]: { status: 'Erfolgreich', result: s.result } }))
+          } else if (s.status === 'FAILURE') {
+            setResults((r) => ({ ...r, [taskName]: { status: 'Fehler', error: s.error } }))
+          } else if (attempts < 15) {
+            attempts++
+            setTimeout(poll, 2000)
+            return
+          } else {
+            setResults((r) => ({ ...r, [taskName]: { status: s.status } }))
+          }
+        } catch {
+          setResults((r) => ({ ...r, [taskName]: { status: 'Status nicht abrufbar' } }))
+        }
+        setRunningId(null)
+      }
+      setTimeout(poll, 1500)
+    } catch (err) {
+      setResults((r) => ({ ...r, [taskName]: { status: 'Fehler beim Starten', error: err instanceof Error ? err.message : String(err) } }))
+      setRunningId(null)
+    }
+  }
+
+  return (
+    <div className="card form-card" style={{ maxWidth: 600, marginTop: '2rem' }}>
+      <h3 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '1rem' }}>Hintergrundaufgaben</h3>
+      {loadError ? (
+        <p className="error">{loadError}</p>
+      ) : tasks.length === 0 ? (
+        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>Keine Aufgaben gefunden.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {tasks.map((task) => {
+            const res = results[task.name]
+            return (
+              <div key={task.name} style={{ padding: '0.75rem', background: 'var(--color-bg)', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                  <div>
+                    <strong style={{ fontSize: '0.9rem' }}>{task.label}</strong>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{task.description}</p>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Automatisch: {task.schedule}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    onClick={() => handleRun(task.name)}
+                    disabled={runningId === task.name}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {runningId === task.name ? 'Läuft...' : 'Jetzt ausführen'}
+                  </button>
+                </div>
+                {res && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', padding: '0.4rem 0.6rem', borderRadius: 4, background: res.error ? '#ffeaea' : '#e8f5e9', color: '#1a1a1a' }}>
+                    <strong>Status:</strong> {res.status}
+                    {res.result && (
+                      <span style={{ marginLeft: '0.5rem' }}>
+                        {Object.entries(res.result).filter(([k]) => k !== 'task' && k !== 'date').map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                      </span>
+                    )}
+                    {res.error && <span style={{ marginLeft: '0.5rem', color: '#c0392b' }}>{res.error}</span>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

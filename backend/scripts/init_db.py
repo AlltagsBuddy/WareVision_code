@@ -25,6 +25,15 @@ def init_roles_and_admin(db, reset_admin: bool = False):
         db.add(werkstatt_role)
         db.flush()
 
+    for role_name, role_desc in [
+        ("buero", "Buero"),
+        ("geschaeftsfuehrung", "Geschaeftsfuehrung"),
+        ("mitarbeiter", "Mitarbeiter"),
+    ]:
+        if not db.query(Role).filter(Role.name == role_name).first():
+            db.add(Role(name=role_name, description=role_desc))
+    db.flush()
+
     admin_user = db.query(User).filter(User.email == "admin@warevision.local").first()
     if not admin_user:
         admin_user = User(

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { maintenancePlansApi, manufacturersApi } from '../api/client'
+import { useEffect, useRef, useState } from 'react'
+import { maintenancePlansApi, manufacturersApi, articlesApi } from '../api/client'
 
 export default function MaintenancePlans() {
   const [plans, setPlans] = useState<any[]>([])
@@ -10,6 +10,9 @@ export default function MaintenancePlans() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [manufacturerFilter, setManufacturerFilter] = useState('')
+  const [planSearch, setPlanSearch] = useState('')
+  const [sortField, setSortField] = useState('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState({
     manufacturer_id: '',
     vehicle_model_id: '',
@@ -21,9 +24,20 @@ export default function MaintenancePlans() {
   })
   const [detailPlan, setDetailPlan] = useState<any | null>(null)
   const [tasks, setTasks] = useState<any[]>([])
+  const [articles, setArticles] = useState<any[]>([])
   const [showTaskForm, setShowTaskForm] = useState(false)
-  const [taskForm, setTaskForm] = useState({ name: '', description: '' })
+  const [taskForm, setTaskForm] = useState({ name: '', description: '', article_id: '', quantity: '1', unit: 'Stück' })
   const [taskSubmitting, setTaskSubmitting] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', description: '', interval_km: '', interval_hours: '', interval_months: '' })
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [editTaskId, setEditTaskId] = useState<string | null>(null)
+  const [editTaskForm, setEditTaskForm] = useState({ name: '', description: '', article_id: '', quantity: '1', unit: 'Stück' })
+  const [editTaskSubmitting, setEditTaskSubmitting] = useState(false)
+  const [docUploading, setDocUploading] = useState(false)
+  const [docError, setDocError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
     setLoading(true)
@@ -39,6 +53,7 @@ export default function MaintenancePlans() {
 
   useEffect(() => {
     manufacturersApi.list().then(setManufacturers)
+    articlesApi.list({ limit: 200 }).then(setArticles)
   }, [])
 
   useEffect(() => {
@@ -90,12 +105,51 @@ export default function MaintenancePlans() {
   const openDetail = async (plan: any) => {
     setDetailPlan(plan)
     setShowTaskForm(false)
+    setEditMode(false)
     maintenancePlansApi.getTasks(plan.id).then(setTasks)
   }
 
   const closeDetail = () => {
     setDetailPlan(null)
     setTasks([])
+    setEditMode(false)
+  }
+
+  const openEditMode = () => {
+    setEditForm({
+      name: detailPlan.name,
+      description: detailPlan.description || '',
+      interval_km: detailPlan.interval_km != null ? String(detailPlan.interval_km) : '',
+      interval_hours: detailPlan.interval_hours != null ? String(detailPlan.interval_hours) : '',
+      interval_months: detailPlan.interval_months != null ? String(detailPlan.interval_months) : '',
+    })
+    setEditError('')
+    setEditMode(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editForm.name.trim()) {
+      setEditError('Name darf nicht leer sein.')
+      return
+    }
+    setEditSubmitting(true)
+    try {
+      const updated = await maintenancePlansApi.update(detailPlan.id, {
+        name: editForm.name.trim(),
+        description: editForm.description || undefined,
+        interval_km: editForm.interval_km ? parseInt(editForm.interval_km, 10) : undefined,
+        interval_hours: editForm.interval_hours ? parseInt(editForm.interval_hours, 10) : undefined,
+        interval_months: editForm.interval_months ? parseInt(editForm.interval_months, 10) : undefined,
+      })
+      setDetailPlan(updated)
+      setEditMode(false)
+      load()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Fehler beim Speichern')
+    } finally {
+      setEditSubmitting(false)
+    }
   }
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -107,15 +161,52 @@ export default function MaintenancePlans() {
         name: taskForm.name.trim(),
         description: taskForm.description || undefined,
         sort_order: tasks.length,
+        article_id: taskForm.article_id || undefined,
+        quantity: taskForm.article_id ? (parseFloat(taskForm.quantity) || 1) : undefined,
+        unit: taskForm.article_id ? (taskForm.unit || 'Stück') : undefined,
       })
       const updated = await maintenancePlansApi.getTasks(detailPlan.id)
       setTasks(updated)
       setShowTaskForm(false)
-      setTaskForm({ name: '', description: '' })
+      setTaskForm({ name: '', description: '', article_id: '', quantity: '1', unit: 'Stück' })
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     } finally {
       setTaskSubmitting(false)
+    }
+  }
+
+  const openEditTask = (t: any) => {
+    setEditTaskId(t.id)
+    setEditTaskForm({
+      name: t.name,
+      description: t.description || '',
+      article_id: t.article_id || '',
+      quantity: t.quantity ? String(Number(t.quantity)) : '1',
+      unit: t.unit || 'Stück',
+    })
+    setShowTaskForm(false)
+  }
+
+  const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!detailPlan || !editTaskId) return
+    setEditTaskSubmitting(true)
+    try {
+      await maintenancePlansApi.updateTask(detailPlan.id, editTaskId, {
+        name: editTaskForm.name.trim(),
+        description: editTaskForm.description || undefined,
+        article_id: editTaskForm.article_id || null,
+        quantity: parseFloat(editTaskForm.quantity) || 1,
+        unit: editTaskForm.article_id ? (editTaskForm.unit || 'Stück') : null,
+      })
+      const updated = await maintenancePlansApi.getTasks(detailPlan.id)
+      setTasks(updated)
+      setEditTaskId(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setEditTaskSubmitting(false)
     }
   }
 
@@ -140,6 +231,51 @@ export default function MaintenancePlans() {
     }
   }
 
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !detailPlan) return
+    setDocError('')
+    setDocUploading(true)
+    try {
+      const updated = await maintenancePlansApi.uploadDocument(detailPlan.id, file)
+      setDetailPlan(updated)
+      load()
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : 'Upload fehlgeschlagen')
+    } finally {
+      setDocUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleDocumentDelete = async () => {
+    if (!detailPlan || !confirm('Dokument wirklich entfernen?')) return
+    setDocError('')
+    try {
+      await maintenancePlansApi.deleteDocument(detailPlan.id)
+      setDetailPlan({ ...detailPlan, document_id: null, document_filename: null })
+      load()
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : 'Fehler beim Entfernen')
+    }
+  }
+
+  const handleDocumentDownload = () => {
+    if (!detailPlan?.document_id) return
+    const token = localStorage.getItem('token')
+    const url = maintenancePlansApi.getDocumentUrl(detailPlan.id)
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = detailPlan.document_filename || 'dokument'
+        a.click()
+        URL.revokeObjectURL(a.href)
+      })
+      .catch(() => alert('Download fehlgeschlagen'))
+  }
+
   const getManufacturerName = (id: string) => manufacturers.find((m) => m.id === id)?.name || id
   const getModelName = (manufacturerId: string, modelId: string) => {
     const list = models[manufacturerId] || []
@@ -148,10 +284,44 @@ export default function MaintenancePlans() {
 
   const vehicleModels = form.manufacturer_id ? (models[form.manufacturer_id] || []) : []
 
+  const handleSort = (field: string) => {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortField(field); setSortDir('asc') }
+  }
+  const sortIcon = (field: string) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕'
+
+  const pq = planSearch.toLowerCase()
+  const displayedPlans = [...plans]
+    .filter((p) => {
+      if (!pq) return true
+      const manuName = getManufacturerName(p.manufacturer_id).toLowerCase()
+      const modelList = p.manufacturer_id ? (models[p.manufacturer_id] || []) : []
+      const modelEntry = modelList.find((m: any) => m.id === p.vehicle_model_id)
+      const modelName = modelEntry ? (modelEntry.name || '').toLowerCase() : ''
+      return (
+        (p.name || '').toLowerCase().includes(pq) ||
+        manuName.includes(pq) ||
+        modelName.includes(pq)
+      )
+    })
+    .sort((a, b) => {
+      let va = '', vb = ''
+      if (sortField === 'manufacturer') { va = getManufacturerName(a.manufacturer_id); vb = getManufacturerName(b.manufacturer_id) }
+      else if (sortField === 'created_at') { va = a.created_at || ''; vb = b.created_at || '' }
+      else { va = a.name || ''; vb = b.name || '' }
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
+
   return (
     <div className="page">
       <h1>Wartungspläne</h1>
       <div className="toolbar">
+        <input
+          type="search"
+          placeholder="Name, Hersteller, Modell..."
+          value={planSearch}
+          onChange={(e) => setPlanSearch(e.target.value)}
+        />
         <select
           value={manufacturerFilter}
           onChange={(e) => setManufacturerFilter(e.target.value)}
@@ -263,14 +433,15 @@ export default function MaintenancePlans() {
         <table className="table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Hersteller</th>
+              <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>Name{sortIcon('name')}</th>
+              <th onClick={() => handleSort('manufacturer')} style={{ cursor: 'pointer' }}>Hersteller{sortIcon('manufacturer')}</th>
               <th>Modell</th>
               <th>Intervall</th>
+              <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer' }}>Erstellt{sortIcon('created_at')}</th>
             </tr>
           </thead>
           <tbody>
-            {plans.map((p) => (
+            {displayedPlans.map((p) => (
               <tr key={p.id} onClick={() => openDetail(p)} style={{ cursor: 'pointer' }}>
                 <td><strong>{p.name}</strong></td>
                 <td>{getManufacturerName(p.manufacturer_id)}</td>
@@ -280,6 +451,7 @@ export default function MaintenancePlans() {
                     .filter(Boolean)
                     .join(' / ') || '–'}
                 </td>
+                <td>{p.created_at ? new Date(p.created_at).toLocaleDateString('de-DE') : '–'}</td>
               </tr>
             ))}
           </tbody>
@@ -290,64 +462,263 @@ export default function MaintenancePlans() {
       {detailPlan && (
         <div className="modal-overlay" onClick={closeDetail}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-            <h2>{detailPlan.name}</h2>
-            <p>
-              <strong>Hersteller:</strong> {getManufacturerName(detailPlan.manufacturer_id)} &nbsp;
-              <strong>Modell:</strong> {detailPlan.vehicle_model_id ? getModelName(detailPlan.manufacturer_id, detailPlan.vehicle_model_id) : '–'}
-            </p>
-            {detailPlan.description && <p>{detailPlan.description}</p>}
-
-            <h3>Aufgaben</h3>
-            {tasks.length === 0 ? (
-              <p>Keine Aufgaben definiert.</p>
+            {editMode ? (
+              <>
+                <h2>Wartungsplan bearbeiten</h2>
+                <form onSubmit={handleEditSubmit}>
+                  <div className="form-group">
+                    <label>Name *</label>
+                    <input
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Beschreibung</label>
+                    <textarea
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Intervall (km)</label>
+                      <input
+                        type="number"
+                        value={editForm.interval_km}
+                        onChange={(e) => setEditForm({ ...editForm, interval_km: e.target.value })}
+                        placeholder="z.B. 10000"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Intervall (Stunden)</label>
+                      <input
+                        type="number"
+                        value={editForm.interval_hours}
+                        onChange={(e) => setEditForm({ ...editForm, interval_hours: e.target.value })}
+                        placeholder="z.B. 100"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Intervall (Monate)</label>
+                      <input
+                        type="number"
+                        value={editForm.interval_months}
+                        onChange={(e) => setEditForm({ ...editForm, interval_months: e.target.value })}
+                        placeholder="z.B. 12"
+                      />
+                    </div>
+                  </div>
+                  {editError && <p className="error">{editError}</p>}
+                  <div className="form-actions">
+                    <button type="button" onClick={() => setEditMode(false)} className="btn-secondary">Abbrechen</button>
+                    <button type="submit" disabled={editSubmitting} className="btn-primary">{editSubmitting ? 'Speichern...' : 'Speichern'}</button>
+                  </div>
+                </form>
+              </>
             ) : (
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {tasks.map((t, i) => (
-                  <li key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                    <span>{i + 1}.</span>
-                    <span><strong>{t.name}</strong></span>
-                    {t.description && <span style={{ color: 'var(--color-text-muted)' }}>– {t.description}</span>}
-                    <button type="button" onClick={() => handleDeleteTask(t.id)} className="btn-secondary btn-sm">Entfernen</button>
-                  </li>
-                ))}
-              </ul>
-            )}
+              <>
+                <h2>{detailPlan.name}</h2>
+                <p>
+                  <strong>Hersteller:</strong> {getManufacturerName(detailPlan.manufacturer_id)} &nbsp;
+                  <strong>Modell:</strong> {detailPlan.vehicle_model_id ? getModelName(detailPlan.manufacturer_id, detailPlan.vehicle_model_id) : '–'}
+                </p>
+                {detailPlan.description && <p>{detailPlan.description}</p>}
 
-            {!showTaskForm ? (
-              <button type="button" onClick={() => setShowTaskForm(true)} className="btn-primary" style={{ marginTop: '0.5rem' }}>
-                + Aufgabe hinzufügen
-              </button>
-            ) : (
-              <form onSubmit={handleAddTask} style={{ marginTop: '1rem', padding: '1rem', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-                <h4>Neue Aufgabe</h4>
-                <div className="form-group">
-                  <label>Name *</label>
-                  <input
-                    value={taskForm.name}
-                    onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })}
-                    placeholder="z.B. Öl wechseln"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Beschreibung</label>
-                  <input
-                    value={taskForm.description}
-                    onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-                    placeholder="Optional"
-                  />
-                </div>
-                <div className="form-actions">
-                  <button type="button" onClick={() => setShowTaskForm(false)} className="btn-secondary">Abbrechen</button>
-                  <button type="submit" disabled={taskSubmitting} className="btn-primary">{taskSubmitting ? 'Speichern...' : 'Hinzufügen'}</button>
-                </div>
-              </form>
-            )}
+                <h3>Hersteller-Dokument</h3>
+                {detailPlan.document_id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                    <span style={{ fontSize: '0.9rem' }}>{detailPlan.document_filename || 'Dokument'}</span>
+                    <button type="button" onClick={handleDocumentDownload} className="btn-secondary btn-sm">
+                      Herunterladen
+                    </button>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="btn-secondary btn-sm">
+                      Ersetzen
+                    </button>
+                    <button type="button" onClick={handleDocumentDelete} className="btn-secondary btn-sm" style={{ color: 'var(--color-error)' }}>
+                      Entfernen
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="btn-secondary btn-sm" disabled={docUploading}>
+                      {docUploading ? 'Wird hochgeladen…' : '+ Dokument hochladen (PDF)'}
+                    </button>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  style={{ display: 'none' }}
+                  onChange={handleDocumentUpload}
+                />
+                {docError && <p className="error" style={{ marginBottom: '0.75rem' }}>{docError}</p>}
 
-            <div className="form-actions" style={{ marginTop: '1.5rem' }}>
-              <button type="button" onClick={handleDeletePlan} className="btn-secondary" style={{ color: 'var(--color-error)' }}>Plan löschen</button>
-              <button type="button" onClick={closeDetail} className="btn-secondary">Schließen</button>
-            </div>
+                <h3>Aufgaben</h3>
+                {tasks.length === 0 ? (
+                  <p>Keine Aufgaben definiert.</p>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0 }}>
+                    {tasks.map((t, i) => (
+                      <li key={t.id} style={{ marginBottom: '0.5rem', borderBottom: '1px solid var(--color-border)' }}>
+                        {editTaskId === t.id ? (
+                          <form onSubmit={handleUpdateTask} style={{ padding: '0.75rem', background: 'var(--color-surface-2)', borderRadius: 6 }}>
+                            <div className="form-group">
+                              <label>Name *</label>
+                              <input
+                                value={editTaskForm.name}
+                                onChange={(e) => setEditTaskForm({ ...editTaskForm, name: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Beschreibung</label>
+                              <input
+                                value={editTaskForm.description}
+                                onChange={(e) => setEditTaskForm({ ...editTaskForm, description: e.target.value })}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Benötigter Artikel (optional)</label>
+                              <select
+                                value={editTaskForm.article_id}
+                                onChange={(e) => setEditTaskForm({ ...editTaskForm, article_id: e.target.value })}
+                              >
+                                <option value="">– Kein Artikel –</option>
+                                {articles.map((a) => (
+                                  <option key={a.id} value={a.id}>{a.article_number} – {a.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {editTaskForm.article_id && (
+                              <div className="form-row">
+                                <div className="form-group">
+                                  <label>Menge</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={editTaskForm.quantity}
+                                    onChange={(e) => setEditTaskForm({ ...editTaskForm, quantity: e.target.value })}
+                                  />
+                                </div>
+                                <div className="form-group">
+                                  <label>Einheit</label>
+                                  <input
+                                    value={editTaskForm.unit}
+                                    onChange={(e) => setEditTaskForm({ ...editTaskForm, unit: e.target.value })}
+                                    placeholder="Stück, Liter, ..."
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            <div className="form-actions">
+                              <button type="button" onClick={() => setEditTaskId(null)} className="btn-secondary">Abbrechen</button>
+                              <button type="submit" disabled={editTaskSubmitting} className="btn-primary">
+                                {editTaskSubmitting ? 'Speichern...' : 'Speichern'}
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.4rem 0' }}>
+                            <span style={{ minWidth: 20, paddingTop: 2 }}>{i + 1}.</span>
+                            <div style={{ flex: 1 }}>
+                              <strong>{t.name}</strong>
+                              {t.description && <span style={{ color: 'var(--color-text-muted)' }}> – {t.description}</span>}
+                              {t.article_id ? (
+                                <div style={{ fontSize: '0.82rem', color: 'var(--color-primary)', marginTop: 2 }}>
+                                  Artikel: {t.article_number} {t.article_name} &nbsp;·&nbsp; {Number(t.quantity)} {t.unit || 'Stück'}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                                  Kein Artikel verknüpft
+                                </div>
+                              )}
+                            </div>
+                            <button type="button" onClick={() => openEditTask(t)} className="btn-secondary btn-sm">Bearbeiten</button>
+                            <button type="button" onClick={() => handleDeleteTask(t.id)} className="btn-secondary btn-sm">Entfernen</button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {!showTaskForm ? (
+                  <button type="button" onClick={() => setShowTaskForm(true)} className="btn-primary" style={{ marginTop: '0.5rem' }}>
+                    + Aufgabe hinzufügen
+                  </button>
+                ) : (
+                  <form onSubmit={handleAddTask} style={{ marginTop: '1rem', padding: '1rem', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                    <h4>Neue Aufgabe</h4>
+                    <div className="form-group">
+                      <label>Name *</label>
+                      <input
+                        value={taskForm.name}
+                        onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })}
+                        placeholder="z.B. Öl wechseln"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Beschreibung</label>
+                      <input
+                        value={taskForm.description}
+                        onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Benötigter Artikel (optional – wird automatisch in Werkstattauftrag übernommen)</label>
+                      <select
+                        value={taskForm.article_id}
+                        onChange={(e) => setTaskForm({ ...taskForm, article_id: e.target.value })}
+                      >
+                        <option value="">– Kein Artikel –</option>
+                        {articles.map((a) => (
+                          <option key={a.id} value={a.id}>{a.article_number} – {a.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {taskForm.article_id && (
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Menge</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={taskForm.quantity}
+                            onChange={(e) => setTaskForm({ ...taskForm, quantity: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Einheit</label>
+                          <input
+                            value={taskForm.unit}
+                            onChange={(e) => setTaskForm({ ...taskForm, unit: e.target.value })}
+                            placeholder="Stück, Liter, ..."
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div className="form-actions">
+                      <button type="button" onClick={() => setShowTaskForm(false)} className="btn-secondary">Abbrechen</button>
+                      <button type="submit" disabled={taskSubmitting} className="btn-primary">{taskSubmitting ? 'Speichern...' : 'Hinzufügen'}</button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="form-actions" style={{ marginTop: '1.5rem' }}>
+                  <button type="button" onClick={handleDeletePlan} className="btn-secondary" style={{ color: 'var(--color-error)' }}>Plan löschen</button>
+                  <button type="button" onClick={openEditMode} className="btn-secondary">Bearbeiten</button>
+                  <button type="button" onClick={closeDetail} className="btn-secondary">Schließen</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

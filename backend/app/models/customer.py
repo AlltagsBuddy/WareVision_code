@@ -26,8 +26,10 @@ class Customer(BaseModel):
         String(10), nullable=False
     )  # B2B, B2C
     company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    salutation: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Herr/Frau/Divers
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    contact_position: Mapped[str | None] = mapped_column(String(100), nullable=True)  # B2B: Position des Ansprechpartners
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     vat_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -39,7 +41,7 @@ class Customer(BaseModel):
     appointments = relationship("Appointment", back_populates="customer")
     workshop_orders = relationship("WorkshopOrder", back_populates="customer")
     invoices = relationship("Invoice", back_populates="customer")
-    documents = relationship("Document", back_populates="customer")
+    documents = relationship("Document", back_populates="customer", foreign_keys="Document.customer_id")
 
 
 class CustomerAddress(BaseModel):

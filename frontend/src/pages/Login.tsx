@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import Logo from '../components/Logo'
 
 export default function Login() {
   const [searchParams] = useSearchParams()
@@ -28,7 +29,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>WareVision</h1>
+        <Logo size="auth" />
         <p className="subtitle">Warenwirtschafts- und Werkstattsystem</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -62,9 +63,6 @@ export default function Login() {
         </form>
         <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
           Noch kein Konto? <Link to="/register">Konto anlegen</Link>
-        </p>
-        <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-muted)', opacity: 0.8 }}>
-          Standard-Admin: admin@warevision.local / admin123
         </p>
       </div>
     </div>

@@ -1,21 +1,47 @@
 """Invoices API."""
 
+import logging
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
 from app.models.user import User
 from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceItemRead
 from app.services.audit import log_audit
+from app.services.stock_booking import (
+    book_standalone_invoice_on_issue,
+    return_stock_for_cancelled_issued_invoice,
+)
+
+logger = logging.getLogger(__name__)
+
+_CENT = Decimal("0.01")
+
+
+def _recalc_totals(db: Session, inv: Invoice) -> None:
+    """Netto, MwSt und Brutto aus den Positionen berechnen.
+    MwSt je Steuersatz kaufmännisch gerundet (§ 14 Abs. 4 Nr. 8 UStG, EN 16931 BR-CO-14),
+    damit PDF, E-Rechnung und Datenbank exakt übereinstimmen."""
+    db.flush()
+    items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == inv.id).all()
+    bases: dict[Decimal, Decimal] = {}
+    for it in items:
+        rate = Decimal(it.vat_rate).quantize(_CENT)
+        bases[rate] = bases.get(rate, Decimal("0")) + Decimal(it.line_total_net).quantize(_CENT, rounding=ROUND_HALF_UP)
+    net = sum(bases.values(), Decimal("0"))
+    vat = sum(((b * r / 100).quantize(_CENT, rounding=ROUND_HALF_UP) for r, b in bases.items()), Decimal("0"))
+    inv.net_amount = net
+    inv.vat_amount = vat
+    inv.gross_amount = net + vat
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -39,18 +65,22 @@ def _next_invoice_number(db: Session) -> str:
 
 
 def _create_items_from_workshop_order(db: Session, invoice_id: UUID, workshop_order_id: UUID) -> tuple[Decimal, Decimal]:
-    """Create invoice items from workshop order, return (net_amount, vat_amount)."""
+    """Rechnungspositionen aus Werkstattauftrag kopieren. Gibt (netto, mwst) zurück.
+    Positionen ohne Beschreibung werden übersprungen. Wirft ValueError wenn keine Positionen vorhanden."""
     items = db.query(WorkshopOrderItem).filter(WorkshopOrderItem.workshop_order_id == workshop_order_id).all()
+    billable = [i for i in items if (i.description or "").strip()]
+    if not billable:
+        raise ValueError("Der Werkstattauftrag enthält keine fakturierbaren Positionen")
     net = Decimal(0)
     vat_total = Decimal(0)
-    for wo_item in items:
+    for wo_item in billable:
         line_net = wo_item.quantity * wo_item.unit_price
         line_vat = line_net * (wo_item.vat_rate / 100)
         inv_item = InvoiceItem(
             invoice_id=invoice_id,
             workshop_order_item_id=wo_item.id,
             article_id=wo_item.article_id,
-            description=wo_item.description,
+            description=wo_item.description.strip(),
             quantity=wo_item.quantity,
             unit=wo_item.unit,
             unit_price=wo_item.unit_price,
@@ -70,8 +100,10 @@ def list_invoices(
     customer_id: UUID | None = None,
     status_filter: str | None = None,
     overdue: bool = False,
+    date_from: date | None = None,
+    date_to: date | None = None,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
 ) -> list[Invoice]:
     """List invoices. overdue=True: nur überfällige (issued/partially_paid, due_date < today)."""
     query = db.query(Invoice)
@@ -86,6 +118,10 @@ def list_invoices(
             Invoice.due_date.isnot(None),
             Invoice.due_date < today,
         )
+    if date_from:
+        query = query.filter(Invoice.invoice_date >= date_from)
+    if date_to:
+        query = query.filter(Invoice.invoice_date <= date_to)
     return query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit).all()
 
 
@@ -93,11 +129,13 @@ def list_invoices(
 def create_invoice(
     payload: InvoiceCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> Invoice:
     """Create invoice. If workshop_order_id given, items are copied from the order."""
     invoice_number = _next_invoice_number(db)
     due_date = payload.due_date or payload.invoice_date + timedelta(days=14)
+    # Leistungsdatum: ohne Angabe gilt das Rechnungsdatum (§ 14 Abs. 4 Nr. 6 UStG)
+    service_date = payload.service_date or payload.invoice_date
 
     if payload.workshop_order_id:
         order = db.query(WorkshopOrder).filter(WorkshopOrder.id == payload.workshop_order_id).first()
@@ -118,6 +156,7 @@ def create_invoice(
             workshop_order_id=payload.workshop_order_id,
             invoice_number=invoice_number,
             invoice_date=payload.invoice_date,
+            service_date=service_date,
             due_date=due_date,
             status="draft",
             currency="EUR",
@@ -129,7 +168,11 @@ def create_invoice(
         )
         db.add(inv)
         db.flush()
-        net, vat = _create_items_from_workshop_order(db, inv.id, payload.workshop_order_id)
+        try:
+            net, vat = _create_items_from_workshop_order(db, inv.id, payload.workshop_order_id)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         inv.net_amount = net
         inv.vat_amount = vat
         inv.gross_amount = net + vat
@@ -147,6 +190,7 @@ def create_invoice(
             workshop_order_id=None,
             invoice_number=invoice_number,
             invoice_date=payload.invoice_date,
+            service_date=service_date,
             due_date=due_date,
             status="draft",
             currency="EUR",
@@ -163,6 +207,7 @@ def create_invoice(
             line_vat = line_net * (it.vat_rate / 100)
             db.add(InvoiceItem(
                 invoice_id=inv.id,
+                article_id=it.article_id,
                 description=it.description,
                 quantity=it.quantity,
                 unit=it.unit,
@@ -176,6 +221,8 @@ def create_invoice(
         inv.vat_amount = vat_total
         inv.gross_amount = net + vat_total
 
+    _recalc_totals(db, inv)
+
     log_audit(
         db,
         user_id=current_user.id,
@@ -187,6 +234,33 @@ def create_invoice(
     db.commit()
     db.refresh(inv)
     return inv
+
+
+@router.post("/zugferd/import")
+async def import_zugferd(
+    file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+) -> dict:
+    """ZUGFeRD/Factur-X-PDF hochladen und eingebettete Rechnungsdaten als JSON zurückgeben."""
+    from app.services.zugferd import parse_zugferd_pdf
+
+    if file.content_type not in ("application/pdf", "application/octet-stream") and not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur PDF-Dateien werden akzeptiert",
+        )
+    pdf_bytes = await file.read()
+    if len(pdf_bytes) == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Datei ist leer")
+    try:
+        data = parse_zugferd_pdf(pdf_bytes)
+    except Exception as exc:
+        logger.exception("ZUGFeRD-Import fehlgeschlagen: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"ZUGFeRD-XML konnte nicht gelesen werden: {exc}",
+        ) from exc
+    return data
 
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
@@ -222,7 +296,7 @@ def mark_invoice_reminder(
     db: Annotated[Session, Depends(get_db)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
 ) -> Invoice:
-    """Mark reminder sent (1., 2. or 3. Mahnung)."""
+    """Mahnstufe setzen (1., 2. oder 3. Mahnung)."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
@@ -239,11 +313,39 @@ def mark_invoice_reminder(
     return inv
 
 
+@router.get("/{invoice_id}/reminder-pdf")
+def get_reminder_pdf(
+    invoice_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    """Mahnbrief als PDF herunterladen (basiert auf aktueller Mahnstufe)."""
+    from app.services.pdf import generate_reminder_pdf
+
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    if inv.reminder_level == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Für diese Rechnung wurde noch keine Mahnung erstellt",
+        )
+    pdf_bytes = generate_reminder_pdf(db, inv)
+    subjects = {1: "Zahlungserinnerung", 2: "1_Mahnung", 3: "2_Mahnung"}
+    label = subjects.get(inv.reminder_level, f"Mahnung_{inv.reminder_level}")
+    filename = f"{label}_{inv.invoice_number}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post("/{invoice_id}/mark-paid", response_model=InvoiceRead)
 def mark_invoice_paid(
     invoice_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> Invoice:
     """Set invoice status to paid."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -265,7 +367,7 @@ def mark_invoice_paid(
 def issue_invoice(
     invoice_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
 ) -> Invoice:
     """Set invoice status to issued."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -273,8 +375,129 @@ def issue_invoice(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
     if inv.status != "draft":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Entwürfe können ausgestellt werden")
+    # Freirechnung: Lager beim Ausstellen abbuchen. WO-Rechnung: Bestand wurde über Auftragspositionen gebucht.
+    if inv.workshop_order_id is None:
+        try:
+            book_standalone_invoice_on_issue(db, list(inv.items), current_user.id)
+        except HTTPException:
+            db.rollback()
+            raise
     inv.status = "issued"
     log_audit(db, user_id=current_user.id, entity_type="invoice", entity_id=inv.id, action="issue")
+    db.commit()
+    db.refresh(inv)
+    return inv
+
+
+@router.post("/{invoice_id}/cancel", response_model=InvoiceRead)
+def cancel_invoice(
+    invoice_id: UUID,
+    reason: str = Body(default="", embed=True),
+    db: Annotated[Session, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(require_admin)] = None,
+) -> Invoice:
+    """GoBD-konforme Stornierung: Erstellt eine Stornorechnung mit negativen Beträgen.
+    Die Originalrechnung wird als 'cancelled' markiert und referenziert die Stornorechnung.
+    Stornierbar: draft, issued, partially_paid (nicht: paid, cancelled)."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    if inv.status in ("cancelled",):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rechnung ist bereits storniert",
+        )
+    if inv.cancellation_invoice_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Für diese Rechnung existiert bereits eine Stornorechnung",
+        )
+
+    stock_return_for_standalone = (
+        inv.workshop_order_id is None and inv.status in ("issued", "partially_paid")
+    )
+
+    # Stornonummer generieren: STO-2026-0001
+    year = date.today().year
+    last_sto = (
+        db.query(Invoice)
+        .filter(Invoice.invoice_number.like(f"STO-{year}-%"))
+        .order_by(Invoice.invoice_number.desc())
+        .first()
+    )
+    sto_num = 1
+    if last_sto:
+        try:
+            sto_num = int(last_sto.invoice_number.split("-")[-1]) + 1
+        except (IndexError, ValueError):
+            pass
+    sto_number = f"STO-{year}-{sto_num:04d}"
+
+    sto_notes = f"Stornorechnung zu {inv.invoice_number}"
+    if reason:
+        sto_notes += f". Grund: {reason}"
+
+    storno = Invoice(
+        customer_id=inv.customer_id,
+        workshop_order_id=None,
+        cancellation_of_id=inv.id,
+        invoice_number=sto_number,
+        invoice_date=date.today(),
+        service_date=inv.service_date,
+        due_date=date.today(),
+        status="issued",
+        currency=inv.currency,
+        net_amount=-inv.net_amount,
+        vat_amount=-inv.vat_amount,
+        gross_amount=-inv.gross_amount,
+        notes=sto_notes,
+        created_by=current_user.id,
+    )
+    db.add(storno)
+    db.flush()
+
+    # Positionen mit negierten Mengen kopieren
+    for item in inv.items:
+        db.add(InvoiceItem(
+            invoice_id=storno.id,
+            article_id=item.article_id,
+            workshop_order_item_id=None,
+            description=item.description,
+            quantity=-item.quantity,
+            unit=item.unit,
+            unit_price=item.unit_price,
+            vat_rate=item.vat_rate,
+            line_total_net=-item.line_total_net,
+        ))
+
+    # Originalrechnung stornieren und Querverweis setzen
+    inv.status = "cancelled"
+    inv.cancellation_invoice_id = storno.id
+
+    # Werkstattauftrag wieder auf "completed" setzen, damit erneut fakturiert werden kann
+    if inv.workshop_order_id:
+        order = db.query(WorkshopOrder).filter(WorkshopOrder.id == inv.workshop_order_id).first()
+        if order and order.status == "invoiced":
+            order.status = "completed"
+
+    log_audit(
+        db,
+        user_id=current_user.id,
+        entity_type="invoice",
+        entity_id=inv.id,
+        action="cancel",
+        new_values={
+            "cancellation_invoice_number": sto_number,
+            "cancellation_invoice_id": str(storno.id),
+            "reason": reason or None,
+        },
+    )
+    if stock_return_for_standalone:
+        try:
+            return_stock_for_cancelled_issued_invoice(db, list(inv.items), current_user.id)
+        except HTTPException:
+            db.rollback()
+            raise
     db.commit()
     db.refresh(inv)
     return inv
@@ -292,7 +515,14 @@ def get_invoice_pdf(
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
-    pdf_bytes = generate_invoice_pdf(db, inv)
+    try:
+        pdf_bytes = generate_invoice_pdf(db, inv)
+    except Exception as exc:
+        logger.exception("PDF-Generierung fehlgeschlagen für Rechnung %s", invoice_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF konnte nicht erstellt werden: {exc}",
+        ) from exc
     return Response(content=pdf_bytes, media_type="application/pdf")
 
 
@@ -325,7 +555,15 @@ def send_invoice_email(
     settings_rows = db.query(AppSetting).filter(AppSetting.key == "company_name").all()
     company_name = (settings_rows[0].value or "WareVision").strip() if settings_rows else "WareVision"
 
-    pdf_bytes = generate_invoice_pdf(db, inv)
+    try:
+        pdf_bytes = generate_invoice_pdf(db, inv)
+    except Exception as exc:
+        logger.exception("PDF-Generierung fehlgeschlagen für Rechnung %s", invoice_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF konnte nicht erstellt werden: {exc}",
+        ) from exc
+
     filename = f"Rechnung_{inv.invoice_number}.pdf"
     subject = f"Rechnung {inv.invoice_number} – {company_name}"
     body = f"""Sehr geehrte Damen und Herren,
@@ -336,15 +574,22 @@ Mit freundlichen Grüßen
 {company_name}
 """
 
-    send_email_with_attachment(
-        db,
-        to_email=recipient,
-        subject=subject,
-        body=body,
-        attachment_filename=filename,
-        attachment_data=pdf_bytes,
-        attachment_content_type="application/pdf",
-    )
+    try:
+        send_email_with_attachment(
+            db,
+            to_email=recipient,
+            subject=subject,
+            body=body,
+            attachment_filename=filename,
+            attachment_data=pdf_bytes,
+            attachment_content_type="application/pdf",
+        )
+    except Exception as exc:
+        logger.exception("E-Mail-Versand fehlgeschlagen für Rechnung %s an %s", invoice_id, recipient)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"E-Mail konnte nicht gesendet werden: {exc}",
+        ) from exc
 
     from datetime import datetime, timezone
     log_audit(
@@ -377,7 +622,14 @@ def get_invoice_zugferd(
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
-    pdf_bytes = generate_zugferd_pdf(db, inv)
+    try:
+        pdf_bytes = generate_zugferd_pdf(db, inv)
+    except Exception as exc:
+        logger.exception("ZUGFeRD-Generierung fehlgeschlagen für Rechnung %s", invoice_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ZUGFeRD-PDF konnte nicht erstellt werden: {exc}",
+        ) from exc
     filename = f"Rechnung_{inv.invoice_number}_ZUGFeRD.pdf"
     return Response(
         content=pdf_bytes,

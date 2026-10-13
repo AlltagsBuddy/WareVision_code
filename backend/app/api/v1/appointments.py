@@ -1,17 +1,18 @@
 """Appointments API."""
 
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.appointment import Appointment
 from app.models.app_setting import AppSetting
-from app.schemas.appointment import AppointmentRead
 from app.models.customer import Customer
 from app.models.manufacturer import Manufacturer
 from app.models.vehicle import Vehicle
@@ -23,11 +24,33 @@ from app.schemas.appointment import (
     AppointmentUpdate,
     ExternalAppointmentImport,
 )
+from app.services.termin_marktplatz import resolve_appointment_type_for_terminmarktplatz
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
+_BERLIN_TZ = ZoneInfo("Europe/Berlin")
 
-def _to_appointment_read(apt: Appointment) -> AppointmentRead:
+
+def _format_appointment_datetime(dt: datetime) -> str:
+    """Terminzeit für E-Mails (deutsch, Europe/Berlin)."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    local = dt.astimezone(_BERLIN_TZ)
+    return local.strftime("%d.%m.%Y, %H:%M Uhr")
+
+
+def _company_name_from_settings(db: Session) -> str:
+    row = db.query(AppSetting).filter(AppSetting.key == "company_name").first()
+    return (row.value or "Quad Paradies Schoner").strip() if row else "Quad Paradies Schoner"
+
+
+def _to_appointment_read(
+    apt: Appointment,
+    *,
+    email_benachrichtigung: str | None = None,
+) -> AppointmentRead:
     """Build AppointmentRead from Appointment (customer must be loaded for customer_* fields)."""
     return AppointmentRead(
         id=apt.id,
@@ -45,16 +68,29 @@ def _to_appointment_read(apt: Appointment) -> AppointmentRead:
         customer_last_name=apt.customer.last_name if apt.customer else None,
         customer_email=apt.customer.email if apt.customer else None,
         customer_phone=apt.customer.phone if apt.customer else None,
+        email_benachrichtigung=email_benachrichtigung,
     )
 
 
-def _check_overlap(db: Session, starts_at: datetime, ends_at: datetime, exclude_id: UUID | None = None) -> bool:
-    """Check if time slot overlaps with existing appointments (excluding cancelled)."""
+def _check_overlap(
+    db: Session,
+    starts_at: datetime,
+    ends_at: datetime,
+    appointment_type: str = "workshop",
+    exclude_id: UUID | None = None,
+) -> bool:
+    """Prüft ob Zeitslot mit bestehenden Terminen kollidiert (stornierte ausgeschlossen).
+    Nur workshop-Termine blockieren einander – Probefahrten können parallel laufen."""
+    if appointment_type != "workshop":
+        # Probefahrten dürfen parallel stattfinden
+        return False
     q = (
         db.query(Appointment)
-        .filter(Appointment.status != "cancelled")
         .filter(
-            (Appointment.starts_at < ends_at) & (Appointment.ends_at > starts_at)
+            Appointment.status != "cancelled",
+            Appointment.appointment_type == "workshop",
+            Appointment.starts_at < ends_at,
+            Appointment.ends_at > starts_at,
         )
     )
     if exclude_id:
@@ -71,7 +107,7 @@ def list_appointments(
     customer_id: UUID | None = None,
     status_filter: str | None = None,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=500),
 ) -> list[Appointment]:
     """List appointments, optionally filtered by date range."""
     query = db.query(Appointment).options(joinedload(Appointment.customer))
@@ -92,17 +128,17 @@ def create_appointment(
     payload: AppointmentCreate,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> Appointment:
+) -> AppointmentRead:
     """Create appointment. Checks for overlaps."""
     if payload.starts_at >= payload.ends_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ende muss nach Beginn liegen",
         )
-    if _check_overlap(db, payload.starts_at, payload.ends_at):
+    if _check_overlap(db, payload.starts_at, payload.ends_at, appointment_type=payload.appointment_type):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Zeitslot überschneidet sich mit einem bestehenden Termin",
+            detail="Zeitslot überschneidet sich mit einem bestehenden Werkstatt-Termin",
         )
     apt = Appointment(
         customer_id=payload.customer_id,
@@ -119,7 +155,80 @@ def create_appointment(
     db.add(apt)
     db.commit()
     db.refresh(apt)
-    return apt
+
+    mail_hinweis: str | None = None
+
+    # Terminbestätigung per E-Mail (nur interne Termine, Kunde mit E-Mail)
+    apt_with_customer = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.customer))
+        .filter(Appointment.id == apt.id)
+        .first()
+    )
+    if not apt_with_customer:
+        mail_hinweis = "Interner Fehler: Termin nach dem Speichern nicht gefunden."
+    elif not apt_with_customer.customer_id:
+        mail_hinweis = (
+            "Keine Terminbestätigung: Es ist kein Kunde am Termin ausgewählt. "
+            "Bitte Kunden in der Liste wählen (nicht „Optional“)."
+        )
+        logger.info(
+            "Terminbestätigung übersprungen: kein customer_id (Termin %s)",
+            apt.id,
+        )
+    elif not apt_with_customer.customer:
+        mail_hinweis = "Keine Terminbestätigung: Kunde konnte nicht geladen werden."
+        logger.warning("Termin %s: customer_id gesetzt, aber Customer fehlt in DB", apt.id)
+    else:
+        cust = apt_with_customer.customer
+        to_mail = (cust.email or "").strip()
+        if not to_mail:
+            mail_hinweis = (
+                "Keine Terminbestätigung: Beim gewählten Kunden ist keine E-Mail-Adresse hinterlegt."
+            )
+            logger.info(
+                "Terminbestätigung übersprungen: Kunde ohne E-Mail (Termin %s, Kunde %s)",
+                apt.id,
+                cust.id,
+            )
+        else:
+            try:
+                from app.services.email import send_appointment_confirmation
+
+                name_parts = [cust.first_name or "", cust.last_name or ""]
+                customer_name = " ".join(p for p in name_parts if p).strip() or "Guten Tag"
+                title = apt.title or "Termin"
+                send_appointment_confirmation(
+                    db,
+                    to_email=to_mail,
+                    customer_name=customer_name,
+                    title=title,
+                    starts_at=_format_appointment_datetime(apt.starts_at),
+                    ends_at=_format_appointment_datetime(apt.ends_at),
+                    company_name=_company_name_from_settings(db),
+                )
+                mail_hinweis = f"Terminbestätigung wurde an {to_mail} gesendet."
+                logger.info(
+                    "Terminbestätigung gesendet (Termin %s → %s)",
+                    apt.id,
+                    to_mail,
+                )
+            except Exception as e:
+                msg = str(e).strip()
+                if len(msg) > 280:
+                    msg = msg[:280] + "…"
+                mail_hinweis = (
+                    f"Terminbestätigung konnte nicht gesendet werden: {msg}"
+                )
+                logger.exception(
+                    "Terminbestätigung fehlgeschlagen (Termin %s, %s)",
+                    apt.id,
+                    to_mail,
+                )
+
+    out_apt = apt_with_customer if apt_with_customer else apt
+    # Response mit Hinweis für die UI (nur bei diesem Endpoint ausgefüllt)
+    return _to_appointment_read(out_apt, email_benachrichtigung=mail_hinweis)
 
 
 @router.get("/webhook/termin-marktplatz/ping")
@@ -170,33 +279,65 @@ def termin_marktplatz_webhook_health(
     return {"status": "ok", "message": "API-Schlüssel gültig, Webhook bereit"}
 
 
+def _parse_termin_marktplatz_webhook_body(body: Any) -> dict[str, Any]:
+    """
+    Viele Anbieter senden JSON-Arrays statt Objekte ([{...}]) – FastAPI würde sonst 422 liefern.
+    """
+    if isinstance(body, dict):
+        return body
+    if isinstance(body, list):
+        if not body:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Leeres JSON-Array: Buchungsobjekt erwartet.",
+            )
+        first = body[0]
+        if not isinstance(first, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Erstes Array-Element muss ein JSON-Objekt sein.",
+            )
+        return first
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Body muss ein JSON-Objekt oder ein Array mit einem Objekt sein.",
+    )
+
+
 @router.post("/webhook/termin-marktplatz", response_model=AppointmentRead)
-def termin_marktplatz_webhook(
-    payload: dict[str, Any],
+async def termin_marktplatz_webhook(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[None, Depends(_verify_termin_marktplatz_api_key)],
-) -> Appointment | dict:
+) -> AppointmentRead:
     """
     Webhook für Terminmarktplatz.de – automatischer Import gebuchter Termine.
     Kein Login erforderlich, Authentifizierung per X-API-Key oder Authorization: Bearer.
     Erwartetes JSON: external_booking_id, starts_at, ends_at (ISO), customer_*, vehicle_*, optional action (booking|cancel|update).
     """
     import logging
+
     log = logging.getLogger(__name__)
+    try:
+        body: Any = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültiges oder leeres JSON.",
+        ) from None
+
+    payload = _parse_termin_marktplatz_webhook_body(body)
     log.info("Terminmarktplatz webhook POST received, payload keys=%s", list(payload.keys()))
 
-    from app.services.termin_marktplatz import process_webhook
+    from app.services.termin_marktplatz import _unwrap_webhook_payload, process_webhook
     from app.services.audit import log_audit
 
     result = process_webhook(db, payload)
     if result is None:
-        raw = payload
-        for w in ("data", "booking", "reservation", "appointment"):
-            if isinstance(payload.get(w), dict):
-                raw = payload[w]
-                break
+        raw = _unwrap_webhook_payload(payload)
         ext_id = (
-            payload.get("external_booking_id") or payload.get("booking_id")
+            payload.get("external_booking_id")
+            or payload.get("booking_id")
             or (raw.get("external_booking_id") or raw.get("booking_id") if isinstance(raw, dict) else None)
         )
         err_detail = {
@@ -207,12 +348,34 @@ def termin_marktplatz_webhook(
             "received_starts_at": (payload.get("starts_at") or (raw.get("starts_at") if isinstance(raw, dict) else None)),
             "received_ends_at": (payload.get("ends_at") or (raw.get("ends_at") if isinstance(raw, dict) else None)),
         }
-        log_audit(db, user_id=None, entity_type="appointment", entity_id=None, action="webhook_termin_marktplatz_error", new_values={"error": err_detail["error"], "external_booking_id": str(ext_id) if ext_id else None, "payload_keys": err_detail["payload_keys"], "data_keys": err_detail["data_keys"], "received_starts_at": err_detail["received_starts_at"], "received_ends_at": err_detail["received_ends_at"]})
+        log_audit(
+            db,
+            user_id=None,
+            entity_type="appointment",
+            entity_id=None,
+            action="webhook_termin_marktplatz_error",
+            new_values={
+                "error": err_detail["error"],
+                "external_booking_id": str(ext_id) if ext_id else None,
+                "payload_keys": err_detail["payload_keys"],
+                "data_keys": err_detail["data_keys"],
+                "received_starts_at": err_detail["received_starts_at"],
+                "received_ends_at": err_detail["received_ends_at"],
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=err_detail,
         )
-    return result
+
+    apt = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.customer))
+        .filter(Appointment.id == result.id)
+        .first()
+        or result
+    )
+    return _to_appointment_read(apt)
 
 
 @router.post("/import-external", response_model=AppointmentRead)
@@ -310,10 +473,31 @@ def import_external_appointment(
             db.flush()
         vehicle_id = vehicle.id
 
+    at_in = (payload.appointment_type or "").strip()
+    at_lower = at_in.lower()
+    if at_lower in ("workshop", "test_drive"):
+        apt_type = at_lower
+    elif not at_in:
+        apt_type = resolve_appointment_type_for_terminmarktplatz(
+            {
+                "appointment_type_raw": None,
+                "title": payload.title,
+                "description": payload.description,
+            }
+        )
+    else:
+        apt_type = resolve_appointment_type_for_terminmarktplatz(
+            {
+                "appointment_type_raw": at_in,
+                "title": payload.title,
+                "description": payload.description,
+            }
+        )
+
     apt = Appointment(
         customer_id=customer_id,
         vehicle_id=vehicle_id,
-        appointment_type="workshop",
+        appointment_type=apt_type,
         source="termin_marktplatz",
         external_booking_id=payload.external_booking_id,
         status="planned",
@@ -371,10 +555,11 @@ def update_appointment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ende muss nach Beginn liegen",
         )
-    if _check_overlap(db, starts_at, ends_at, exclude_id=appointment_id):
+    apt_type = payload.appointment_type if payload.appointment_type is not None else apt.appointment_type
+    if _check_overlap(db, starts_at, ends_at, appointment_type=apt_type, exclude_id=appointment_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Zeitslot überschneidet sich mit einem bestehenden Termin",
+            detail="Zeitslot überschneidet sich mit einem bestehenden Werkstatt-Termin",
         )
     if payload.customer_id is not None:
         apt.customer_id = payload.customer_id
@@ -417,10 +602,40 @@ def delete_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Termin nicht gefunden",
         )
+    # Daten für ggf. E-Mail vor Statusänderung merken
+    cancel_title = apt.title or "Termin"
+    cancel_starts_at = apt.starts_at
+    cancel_source = apt.source
+    cancel_customer_id = apt.customer_id
+
     apt.status = "cancelled"
     db.commit()
 
     result = AppointmentCancelResponse()
+
+    # Interne Termine: Stornierungsmail direkt per Resend/SMTP
+    if cancel_source == "internal" and cancel_customer_id:
+        cust = db.query(Customer).filter(Customer.id == cancel_customer_id).first()
+        if cust and (cust.email or "").strip():
+            try:
+                from app.services.email import send_appointment_cancellation
+
+                name_parts = [cust.first_name or "", cust.last_name or ""]
+                customer_name = " ".join(p for p in name_parts if p).strip() or "Guten Tag"
+                send_appointment_cancellation(
+                    db,
+                    to_email=cust.email.strip(),
+                    customer_name=customer_name,
+                    title=cancel_title,
+                    starts_at=_format_appointment_datetime(cancel_starts_at),
+                    reason=reason,
+                    company_name=_company_name_from_settings(db),
+                )
+            except Exception:
+                logger.exception(
+                    "Stornierungsmail konnte nicht gesendet werden (Termin %s)",
+                    appointment_id,
+                )
 
     # Bei Terminmarktplatz-Terminen: Callback aufrufen, damit Kunde Stornierungsmail erhält
     if (

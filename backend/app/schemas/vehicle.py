@@ -1,6 +1,7 @@
 """Vehicle schemas."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -23,6 +24,9 @@ class VehicleCreate(BaseModel):
     engine_variant: Optional[str] = None
     color: Optional[str] = None
     notes: Optional[str] = None
+    purchase_price: Optional[Decimal] = None
+    sale_price: Optional[Decimal] = None
+    storage_location_id: Optional[UUID] = None
 
 
 class VehicleUpdate(BaseModel):
@@ -40,6 +44,9 @@ class VehicleUpdate(BaseModel):
     engine_variant: Optional[str] = None
     color: Optional[str] = None
     notes: Optional[str] = None
+    purchase_price: Optional[Decimal] = None
+    sale_price: Optional[Decimal] = None
+    storage_location_id: Optional[UUID] = None
 
 
 class VehicleRead(BaseModel):
@@ -59,6 +66,10 @@ class VehicleRead(BaseModel):
     engine_variant: Optional[str] = None
     color: Optional[str] = None
     notes: Optional[str] = None
+    is_active: bool = True
+    purchase_price: Optional[Decimal] = None
+    sale_price: Optional[Decimal] = None
+    storage_location_id: Optional[UUID] = None
     created_at: datetime
 
     class Config:

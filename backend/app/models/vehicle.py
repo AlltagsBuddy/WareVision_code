@@ -1,9 +1,10 @@
 """Vehicle model."""
 
 import uuid
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,10 +49,18 @@ class Vehicle(BaseModel):
     engine_variant: Mapped[str | None] = mapped_column(String(100), nullable=True)
     color: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    sale_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     customer = relationship("Customer", back_populates="vehicles")
     manufacturer = relationship("Manufacturer", back_populates="vehicles")
     vehicle_model = relationship("VehicleModel", back_populates="vehicles")
     workshop_orders = relationship("WorkshopOrder", back_populates="vehicle")
     appointments = relationship("Appointment", back_populates="vehicle")
-    documents = relationship("Document", back_populates="vehicle")
+    documents = relationship("Document", back_populates="vehicle", foreign_keys="Document.vehicle_id")

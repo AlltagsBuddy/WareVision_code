@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { authApi } from '../api/client'
+import Logo from './Logo'
 
 export default function Layout() {
   const { user, logout } = useAuth()
@@ -12,25 +13,28 @@ export default function Layout() {
   const [pwError, setPwError] = useState('')
   const [pwSubmitting, setPwSubmitting] = useState(false)
 
+  const isAdmin = user?.role_name === 'admin'
+  const perm = (module: string) =>
+    isAdmin || user?.permissions?.[module]?.visible !== false
+
   const navItems = [
-    { path: '/', label: 'Dashboard' },
-    { path: '/customers', label: 'Kunden' },
-    { path: '/vehicles', label: 'Fahrzeuge' },
-    { path: '/articles', label: 'Artikel' },
-    { path: '/stock', label: 'Lager' },
-    { path: '/workshop-orders', label: 'Werkstattaufträge' },
-    { path: '/maintenance-plans', label: 'Wartungspläne' },
-    { path: '/appointments', label: 'Terminplaner' },
-    { path: '/invoices', label: 'Rechnungen' },
-    { path: '/documents', label: 'Dokumente' },
-    ...(user?.role_name === 'admin'
-      ? [
-          { path: '/users', label: 'Benutzer' },
-          { path: '/settings', label: 'Einstellungen' },
-          { path: '/audit-logs', label: 'Audit-Log' },
-        ]
-      : []),
-  ]
+    { path: '/', label: 'Dashboard', show: true },
+    { path: '/customers', label: 'Kunden', show: perm('customers') },
+    { path: '/vehicles', label: 'Fahrzeuge', show: perm('vehicles') },
+    { path: '/articles', label: 'Artikel', show: perm('articles') },
+    { path: '/suppliers', label: 'Lieferanten', show: perm('suppliers') },
+    { path: '/stock', label: 'Lager', show: perm('stock') },
+    { path: '/quotes', label: 'Angebote', show: perm('quotes') },
+    { path: '/workshop-orders', label: 'Werkstattauftraege', show: perm('workshop_orders') },
+    { path: '/maintenance-plans', label: 'Wartungsplaene', show: perm('maintenance_plans') },
+    { path: '/appointments', label: 'Terminplaner', show: perm('appointments') },
+    { path: '/invoices', label: 'Rechnungen', show: perm('invoices') },
+    { path: '/documents', label: 'Dokumente', show: perm('documents') },
+    { path: '/users', label: 'Benutzer', show: isAdmin },
+    { path: '/accounting', label: 'Buchhaltung', show: isAdmin },
+    { path: '/settings', label: 'Einstellungen', show: isAdmin },
+    { path: '/audit-logs', label: 'Audit-Log', show: isAdmin },
+  ].filter((item) => item.show)
 
   return (
     <div className="layout">
@@ -43,7 +47,9 @@ export default function Layout() {
         >
           {navOpen ? '✕' : '☰'}
         </button>
-        <Link to="/" className="logo" onClick={() => setNavOpen(false)}>WareVision</Link>
+        <Link to="/" className="logo" onClick={() => setNavOpen(false)}>
+          <Logo size="header" />
+        </Link>
         <nav className={`nav ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)}>
           {navItems.map(({ path, label }) => (
             <Link

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { authApi } from '../api/client'
+import Logo from '../components/Logo'
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -12,7 +13,7 @@ export default function Register() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+  const [success, setSuccess] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,15 +28,13 @@ export default function Register() {
     }
     setLoading(true)
     try {
-      const { access_token } = await authApi.register({
+      await authApi.register({
         email: form.email.trim(),
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         password: form.password,
       })
-      localStorage.setItem('token', access_token)
-      navigate('/')
-      window.location.reload()
+      setSuccess(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registrierung fehlgeschlagen')
     } finally {
@@ -43,10 +42,25 @@ export default function Register() {
     }
   }
 
+  if (success) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <Logo size="auth" />
+          <p className="subtitle">Registrierung erfolgreich</p>
+          <p style={{ marginBottom: '1rem' }}>
+            Ihr Konto wurde angelegt. Ein Administrator muss es noch freischalten, bevor Sie sich anmelden können.
+          </p>
+          <Link to="/login" className="btn-primary" style={{ display: 'block', textAlign: 'center' }}>Zur Anmeldung</Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>WareVision</h1>
+        <Logo size="auth" />
         <p className="subtitle">Konto anlegen</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">

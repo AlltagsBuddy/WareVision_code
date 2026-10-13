@@ -4,15 +4,35 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, Numeric, String, Table, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.database import Base
 from app.models.base import BaseModel
 
 if TYPE_CHECKING:
     from app.models.stock_movement import StockMovement
     from app.models.stock_reservation import StockReservation
+    from app.models.manufacturer import VehicleModel
+
+# Zuordnungstabelle: Artikel ↔ Fahrzeugmodell (many-to-many)
+article_vehicle_models_table = Table(
+    "article_vehicle_models",
+    Base.metadata,
+    Column(
+        "article_id",
+        UUID(as_uuid=True),
+        ForeignKey("articles.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "vehicle_model_id",
+        UUID(as_uuid=True),
+        ForeignKey("vehicle_models.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class Article(BaseModel):
@@ -51,7 +71,17 @@ class Article(BaseModel):
     qr_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     oem_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     stock_movements = relationship("StockMovement", back_populates="article")
     stock_reservations = relationship("StockReservation", back_populates="article")
+    compatible_models = relationship(
+        "VehicleModel",
+        secondary=article_vehicle_models_table,
+        lazy="selectin",
+    )

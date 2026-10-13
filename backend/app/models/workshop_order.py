@@ -12,6 +12,7 @@ from app.models.base import BaseModel
 
 if TYPE_CHECKING:
     from app.models.customer import Customer
+    from app.models.maintenance_plan import MaintenancePlan
     from app.models.vehicle import Vehicle
     from app.models.article import Article
     from app.models.appointment import Appointment
@@ -39,6 +40,12 @@ class WorkshopOrder(BaseModel):
         ForeignKey("appointments.id"),
         nullable=True,
     )
+    # Zugehöriger Wartungsplan (wird beim Erstellen automatisch anhand Fahrzeug/Modell gesetzt)
+    maintenance_plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("maintenance_plans.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     order_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     status: Mapped[str] = mapped_column(
         String(30), nullable=False
@@ -57,6 +64,7 @@ class WorkshopOrder(BaseModel):
 
     customer = relationship("Customer", back_populates="workshop_orders")
     vehicle = relationship("Vehicle", back_populates="workshop_orders")
+    maintenance_plan = relationship("MaintenancePlan")
     items = relationship(
         "WorkshopOrderItem",
         back_populates="workshop_order",

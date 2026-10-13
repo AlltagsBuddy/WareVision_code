@@ -1,16 +1,19 @@
 """Maintenance plan and task models."""
 
 import uuid
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
 
 if TYPE_CHECKING:
+    from app.models.document import Document
     from app.models.manufacturer import Manufacturer, VehicleModel
+    from app.models.article import Article
 
 
 class MaintenancePlan(BaseModel):
@@ -28,6 +31,12 @@ class MaintenancePlan(BaseModel):
         ForeignKey("vehicle_models.id", ondelete="CASCADE"),
         nullable=True,
     )
+    # Optionales Hersteller-Dokument (PDF) das dem Plan beiliegt
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     interval_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -36,6 +45,7 @@ class MaintenancePlan(BaseModel):
 
     manufacturer = relationship("Manufacturer", back_populates="maintenance_plans")
     vehicle_model = relationship("VehicleModel", back_populates="maintenance_plans")
+    document = relationship("Document", foreign_keys=[document_id])
     tasks = relationship(
         "MaintenanceTask",
         back_populates="maintenance_plan",
@@ -56,5 +66,14 @@ class MaintenanceTask(BaseModel):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Optionaler Artikel der automatisch in den Werkstattauftrag übernommen wird
+    article_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("articles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=1, nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     maintenance_plan = relationship("MaintenancePlan", back_populates="tasks")
+    article = relationship("Article")

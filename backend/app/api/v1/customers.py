@@ -1,9 +1,13 @@
 """Customers API."""
 
+import base64
+import uuid as uuid_lib
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin
@@ -116,6 +120,17 @@ def update_customer(
             detail="Kunde nicht gefunden",
         )
     data = payload.model_dump(exclude_unset=True)
+    if "email" in data and data["email"]:
+        duplicate = (
+            db.query(Customer)
+            .filter(Customer.email == data["email"], Customer.id != customer_id)
+            .first()
+        )
+        if duplicate:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ein anderer Kunde mit dieser E-Mail-Adresse existiert bereits",
+            )
     old_vals = {k: str(getattr(customer, k)) for k in data.keys() if hasattr(customer, k)}
     for key, value in data.items():
         setattr(customer, key, value)
@@ -213,6 +228,8 @@ def dsgvo_delete_customer(
     """DSGVO Art. 17: Recht auf Löschung. Anonymisiert bei Rechnungen (GoBD), sonst endgültige Löschung."""
     from app.models.invoice import Invoice
     from app.models.workshop_order import WorkshopOrder
+    from app.models.vehicle import Vehicle
+    from app.models.appointment import Appointment
 
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -235,19 +252,102 @@ def dsgvo_delete_customer(
             addr.house_number = None
             addr.postal_code = "00000"
             addr.city = "[Anonymisiert]"
+        # DSGVO: Kennzeichen und VIN der Fahrzeuge anonymisieren (personenbezogene Daten)
+        for vehicle in db.query(Vehicle).filter(Vehicle.customer_id == customer_id).all():
+            vehicle.license_plate = "[Anonymisiert]"
+            vehicle.vin = None
+        # DSGVO: Personenbezogene Daten aus Terminen entfernen
+        for apt in db.query(Appointment).filter(Appointment.customer_id == customer_id).all():
+            apt.external_booking_id = None
+            apt.title = None
+            apt.description = None
         log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_anonymize")
         db.commit()
         return {"action": "anonymized", "reason": "Rechnungen oder Aufträge vorhanden (GoBD)"}
     else:
-        from app.models.appointment import Appointment
-
         for apt in db.query(Appointment).filter(Appointment.customer_id == customer_id).all():
             apt.customer_id = None
             apt.vehicle_id = None
+            apt.external_booking_id = None
+            apt.title = None
+            apt.description = None
         log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_delete", old_values={"email": customer.email})
         db.delete(customer)
         db.commit()
         return {"action": "deleted"}
+
+
+@router.get("/{customer_id}/dsgvo-consent-pdf")
+def get_dsgvo_consent_pdf(
+    customer_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    """DSGVO-Einwilligungs-PDF fuer einen Kunden generieren (zum Ausdrucken und Unterschreiben)."""
+    from app.services.pdf import generate_dsgvo_consent_pdf
+
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kunde nicht gefunden")
+
+    pdf_bytes = generate_dsgvo_consent_pdf(db, customer)
+    name_slug = (customer.last_name or customer.company_name or str(customer_id))[:30].replace(" ", "_")
+    filename = f"DSGVO_Einwilligung_{name_slug}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@router.post("/{customer_id}/dsgvo-sign")
+def dsgvo_sign_and_save(
+    customer_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    signature_data_url: str = Body(..., embed=True),
+) -> dict:
+    """Unterschrift entgegennehmen, ins DSGVO-PDF einbetten und bei Kundendokumenten speichern."""
+    from app.services.pdf import generate_dsgvo_consent_pdf
+    from app.models.document import Document
+    from app.core.config import get_settings
+
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kunde nicht gefunden")
+
+    # Base64-PNG aus Data-URL extrahieren
+    if "," not in signature_data_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ungueltige Unterschrift")
+    sig_bytes = base64.b64decode(signature_data_url.split(",", 1)[1])
+
+    # PDF mit Unterschrift generieren
+    pdf_bytes = generate_dsgvo_consent_pdf(db, customer, signature_bytes=sig_bytes)
+
+    # In Uploads-Verzeichnis speichern
+    settings = get_settings()
+    upload_dir = Path(settings.UPLOAD_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"DSGVO_{uuid_lib.uuid4().hex}.pdf"
+    file_path = upload_dir / file_name
+    file_path.write_bytes(pdf_bytes)
+
+    # Dokument in DB anlegen
+    name_slug = (customer.last_name or customer.company_name or str(customer_id))[:30].replace(" ", "_")
+    doc = Document(
+        customer_id=customer_id,
+        filename=f"DSGVO_Einwilligung_{name_slug}_unterschrieben.pdf",
+        content_type="application/pdf",
+        file_path=str(file_path),
+        file_size=len(pdf_bytes),
+        created_by=current_user.id,
+    )
+    db.add(doc)
+    log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_sign")
+    db.commit()
+    db.refresh(doc)
+
+    return {"document_id": str(doc.id), "filename": doc.filename}
 
 
 @router.get("/{customer_id}/export")
