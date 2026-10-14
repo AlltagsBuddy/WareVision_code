@@ -31,6 +31,7 @@ export default function Layout() {
     { path: '/appointments', label: 'Terminplaner', show: perm('appointments') },
     { path: '/invoices', label: 'Rechnungen', show: perm('invoices') },
     { path: '/documents', label: 'Dokumente', show: perm('documents') },
+    { path: '/help', label: 'Hilfe', show: true },
     { path: '/users', label: 'Benutzer', show: isAdmin },
     { path: '/accounting', label: 'Buchhaltung', show: isAdmin },
     { path: '/settings', label: 'Einstellungen', show: isAdmin },

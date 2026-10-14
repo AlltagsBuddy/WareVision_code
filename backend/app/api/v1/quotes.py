@@ -103,7 +103,6 @@ def _apply_payload(db: Session, quote: Quote, payload: QuoteIn) -> None:
 
     # Positionen vollständig ersetzen
     quote.items.clear()
-    db.flush()
     bases: dict[Decimal, Decimal] = {}
     for pos, it in enumerate(payload.items, 1):
         if it.article_id and not db.query(Article.id).filter(Article.id == it.article_id).first():
@@ -157,8 +156,9 @@ def create_quote(
 ) -> Quote:
     """Neues Angebot / neuen Kostenvoranschlag als Entwurf anlegen."""
     quote = Quote(quote_number=_next_quote_number(db), status="draft", created_by=current_user.id)
-    db.add(quote)
+    # Erst prüfen und befüllen, dann speichern (kein vorzeitiges Einfügen eines unvollständigen Datensatzes)
     _apply_payload(db, quote, payload)
+    db.add(quote)
     db.flush()
     log_audit(
         db, user_id=current_user.id, entity_type="quote", entity_id=quote.id, action="create",

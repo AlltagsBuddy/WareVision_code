@@ -91,6 +91,9 @@ export const settingsApi = {
     resend_from_email: string
     resend_from_name: string
     resend_configured: boolean
+    ai_help_api_key: string
+    ai_help_model: string
+    ai_help_configured: boolean
     company_logo_path: string
     company_logo_set: boolean
   }>('/settings'),
@@ -118,6 +121,9 @@ export const settingsApi = {
     resend_api_key?: string
     resend_from_email?: string
     resend_from_name?: string
+    ai_help_api_key?: string
+    ai_help_model?: string
+    ai_help_api_key_remove?: boolean
   }) =>
     api<{ company_name: string; company_address: string; company_vat_id: string }>('/settings', {
       method: 'PATCH',
@@ -780,6 +786,17 @@ export const stockCountsApi = {
     if (!res.ok) throw new Error('CSV konnte nicht geladen werden')
     return res.blob()
   },
+}
+
+export interface HelpSource { id: string; article_id: string; title: string }
+export interface HelpAnswer { answer: string; mode: 'ai' | 'search'; sources: HelpSource[]; notice?: string | null }
+
+export const helpApi = {
+  status: () => api<{ ai_enabled: boolean; model: string | null }>('/help/status'),
+  articles: () => api<{ id: string; title: string; sections: { id: string; heading: string; text: string }[] }[]>('/help/articles'),
+  search: (q: string) => api<{ id: string; article_id: string; article_title: string; heading: string; text: string }[]>(`/help/search?q=${encodeURIComponent(q)}`),
+  ask: (question: string, history: { role: 'user' | 'assistant'; content: string }[]) =>
+    api<HelpAnswer>('/help/ask', { method: 'POST', body: JSON.stringify({ question, history }) }),
 }
 
 export const laborRatesApi = {

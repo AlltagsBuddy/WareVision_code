@@ -26,6 +26,8 @@ _SETTING_KEYS = (
     "company_bank_bic",
     "company_bank_account_holder",
     "invoice_vat_exemption_note",
+    "ai_help_api_key",
+    "ai_help_model",
     "company_logo_path",
     "smtp_host",
     "smtp_port",
@@ -129,6 +131,9 @@ def get_settings(
         company_bank_bic=d.get("company_bank_bic", ""),
         company_bank_account_holder=d.get("company_bank_account_holder", ""),
         invoice_vat_exemption_note=d.get("invoice_vat_exemption_note", ""),
+        ai_help_api_key="********" if d.get("ai_help_api_key") else "",
+        ai_help_model=d.get("ai_help_model", ""),
+        ai_help_configured=bool(d.get("ai_help_api_key")),
         company_logo_path=logo_path,
         company_logo_set=bool(logo_path and os.path.isfile(logo_path)),
         smtp_host=d.get("smtp_host", ""),
@@ -218,7 +223,11 @@ def update_settings(
         "smtp_password": {"", "********"},
         "termin_marktplatz_api_key": {""},
         "resend_api_key": {"", "********"},
+        "ai_help_api_key": {"", "********"},
     }
+    # KI-Hilfe-Key bewusst entfernen (leeres Feld bedeutet sonst „unverändert“)
+    if payload.ai_help_api_key_remove:
+        db.query(AppSetting).filter(AppSetting.key == "ai_help_api_key").delete()
     for key in _SETTING_KEYS:
         val = getattr(payload, key, None)
         if key in _protected and (val is None or val in _protected[key]):
@@ -250,6 +259,9 @@ def update_settings(
         company_bank_bic=d.get("company_bank_bic", ""),
         company_bank_account_holder=d.get("company_bank_account_holder", ""),
         invoice_vat_exemption_note=d.get("invoice_vat_exemption_note", ""),
+        ai_help_api_key="********" if d.get("ai_help_api_key") else "",
+        ai_help_model=d.get("ai_help_model", ""),
+        ai_help_configured=bool(d.get("ai_help_api_key")),
         company_logo_path=logo_path,
         company_logo_set=bool(logo_path and os.path.isfile(logo_path)),
         smtp_host=d.get("smtp_host", ""),

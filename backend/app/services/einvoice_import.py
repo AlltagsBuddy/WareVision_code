@@ -157,7 +157,10 @@ def _extract_xml_from_pdf(pdf_bytes: bytes) -> bytes:
     from facturx import get_facturx_xml_from_pdf
 
     # check_xsd=False: auch formal fehlerhafte Lieferanten-XMLs lesen (Inhalt wird danach geprüft)
-    result = get_facturx_xml_from_pdf(pdf_bytes, check_xsd=False)
+    try:
+        result = get_facturx_xml_from_pdf(pdf_bytes, check_xsd=False)
+    except Exception as exc:  # beschädigte oder verschlüsselte PDF
+        raise EInvoiceError("Die PDF-Datei ist beschädigt oder kann nicht gelesen werden.") from exc
     xml_raw = None
     # factur-x liefert (Dateiname, XML-Bytes)
     if isinstance(result, tuple) and len(result) > 1:

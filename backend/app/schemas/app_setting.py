@@ -33,6 +33,10 @@ class AppSettingsOut(BaseModel):
     resend_from_email: str = ""
     resend_from_name: str = ""
     resend_configured: bool = False  # True wenn API-Key gesetzt
+    # KI-Hilfe (Anthropic)
+    ai_help_api_key: str = ""       # GET: "" oder "********" wenn gesetzt
+    ai_help_model: str = ""
+    ai_help_configured: bool = False
 
 
 class AppSettingsUpdate(BaseModel):
@@ -62,3 +66,6 @@ class AppSettingsUpdate(BaseModel):
     resend_api_key: str | None = None
     resend_from_email: str | None = None
     resend_from_name: str | None = None
+    ai_help_api_key: str | None = None
+    ai_help_model: str | None = None
+    ai_help_api_key_remove: bool = False

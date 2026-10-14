@@ -31,8 +31,12 @@ export default function Settings() {
     resend_api_key: '',
     resend_from_email: '',
     resend_from_name: '',
+    ai_help_api_key: '',
+    ai_help_model: '',
   })
   const [logoSet, setLogoSet] = useState(false)
+  const [aiConfigured, setAiConfigured] = useState(false)
+  const [aiRemove, setAiRemove] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoError, setLogoError] = useState('')
@@ -108,6 +112,7 @@ export default function Settings() {
       .then((data) => {
         setTerminMarktplatzConfigured(!!data.termin_marktplatz_configured)
         setResendConfigured(!!data.resend_configured)
+        setAiConfigured(!!data.ai_help_configured)
         setLogoSet(!!data.company_logo_set)
         setForm({
           company_name: data.company_name || '',
@@ -133,6 +138,8 @@ export default function Settings() {
           resend_api_key: '',
           resend_from_email: data.resend_from_email || '',
           resend_from_name: data.resend_from_name || '',
+          ai_help_api_key: '',
+          ai_help_model: data.ai_help_model || '',
         })
       })
       .catch(() => setError('Einstellungen konnten nicht geladen werden.'))
@@ -169,7 +176,13 @@ export default function Settings() {
         resend_api_key: form.resend_api_key || undefined,
         resend_from_email: form.resend_from_email || undefined,
         resend_from_name: form.resend_from_name || undefined,
+        ai_help_api_key: form.ai_help_api_key || undefined,
+        ai_help_model: form.ai_help_model,
+        ai_help_api_key_remove: aiRemove || undefined,
       })
+      if (form.ai_help_api_key) setAiConfigured(true)
+      if (aiRemove) { setAiConfigured(false); setAiRemove(false) }
+      setForm((f) => ({ ...f, ai_help_api_key: '' }))
       setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler beim Speichern')
@@ -482,6 +495,40 @@ export default function Settings() {
             value={form.smtp_from}
             onChange={(e) => setForm((f) => ({ ...f, smtp_from: e.target.value }))}
             placeholder="rechnungen@firma.de (sonst Benutzername)"
+          />
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem', fontSize: '1rem' }}>KI-Hilfe (Claude)</h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Mit API-Key beantwortet ein KI-Assistent Fragen zur Bedienung (Seite „Hilfe“). Die Frage wird dafür an Anthropic
+          übermittelt; E-Mail-Adressen, Telefonnummern, IBANs und Kennzeichen werden vorher automatisch entfernt. Ohne Key
+          nutzt die Hilfe eine Stichwortsuche, und es verlassen keine Daten den Server.
+          {aiConfigured && <strong style={{ color: 'var(--color-success)', marginLeft: '0.5rem' }}>✓ KI-Hilfe aktiv</strong>}
+        </p>
+        <div className="form-group">
+          <label htmlFor="ai_help_api_key">Anthropic API-Key</label>
+          <input
+            id="ai_help_api_key"
+            type="password"
+            autoComplete="off"
+            value={form.ai_help_api_key}
+            onChange={(e) => setForm((f) => ({ ...f, ai_help_api_key: e.target.value }))}
+            placeholder={aiConfigured ? '(gesetzt – leer lassen = unverändert)' : 'sk-ant-...'}
+          />
+          {aiConfigured && (
+            <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginTop: '0.4rem', fontWeight: 400 }}>
+              <input type="checkbox" checked={aiRemove} onChange={(e) => setAiRemove(e.target.checked)} /> API-Key beim Speichern entfernen
+            </label>
+          )}
+        </div>
+        <div className="form-group">
+          <label htmlFor="ai_help_model">Modell (optional)</label>
+          <input
+            id="ai_help_model"
+            type="text"
+            value={form.ai_help_model}
+            onChange={(e) => setForm((f) => ({ ...f, ai_help_model: e.target.value }))}
+            placeholder="claude-haiku-5-5 (Standard)"
           />
         </div>
 

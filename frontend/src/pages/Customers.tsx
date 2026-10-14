@@ -762,7 +762,7 @@ export default function Customers() {
                           Export
                         </button>
                         <button type="button" onClick={() => handleDsgvoDelete(c)} className="btn-secondary btn-sm">
-                          DSGVO: Loeschen
+                          DSGVO: Löschen
                         </button>
                       </>
                     )}

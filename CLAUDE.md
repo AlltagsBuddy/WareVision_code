@@ -83,6 +83,8 @@ WareVision_code/
 | Inventur (Blindzählung, Differenzbuchung, Inventurliste PDF/CSV) | ✅ | ✅ |
 | E-Rechnung: ZUGFeRD-Ausgang (EN16931, PDF/A-3) | ✅ | ✅ |
 | E-Rechnung: Eingang (ZUGFeRD + XRechnung UBL/CII, GoBD-Archiv) | ✅ | ✅ |
+| Hilfe-Center + KI-Assistent (Claude Haiku, optional; Fallback Stichwortsuche) | ✅ | ✅ |
+| Automatische Tests (pytest, vitest, E2E) – siehe docs/TESTS.md | ✅ | ✅ |
 
 ## Module (noch offen)
 

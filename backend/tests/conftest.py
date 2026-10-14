@@ -1,8 +1,9 @@
 """Test-Konfiguration und gemeinsame Fixtures.
 
-Tests laufen gegen die echte warevision-Datenbank, aber jeder Test
-wird in einer Transaktion ausgeführt, die am Ende zurückgerollt wird.
-Dadurch bleibt die Datenbank sauber – kein Commit, keine Testdaten.
+Tests laufen gegen eine eigene, leere Testdatenbank (Standard: „warevision_test“
+auf demselben PostgreSQL-Server wie DATABASE_URL). Sie wird bei Bedarf automatisch
+angelegt. Jeder Test läuft in einer Transaktion, die am Ende zurückgerollt wird.
+Echte Daten in „warevision“ werden dadurch nie berührt.
 """
 
 import os
@@ -12,13 +13,39 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-# Test-URL: dieselbe DB wie dev, aber nur mit Rollback-Transaktionen
-_DB_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql://warevision:warevision@localhost:5432/warevision",
-)
+TEST_DB_NAME = "warevision_test"
+
+
+def _test_db_url() -> str:
+    """URL der Testdatenbank: TEST_DATABASE_URL oder DATABASE_URL mit Datenbank „warevision_test“."""
+    explicit = os.getenv("TEST_DATABASE_URL")
+    if explicit:
+        return explicit
+    base = os.getenv("DATABASE_URL", "postgresql://warevision:warevision@localhost:5432/warevision")
+    return make_url(base).set(database=TEST_DB_NAME).render_as_string(hide_password=False)
+
+
+def _ensure_database(url: str) -> None:
+    """Testdatenbank anlegen, falls sie noch nicht existiert."""
+    target = make_url(url)
+    if target.database in (None, "", "warevision"):
+        raise RuntimeError("Tests dürfen nicht gegen die Produktivdatenbank „warevision“ laufen.")
+    admin = create_engine(target.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": target.database}
+            ).scalar()
+            if not exists:
+                conn.execute(text(f'CREATE DATABASE "{target.database}"'))
+    finally:
+        admin.dispose()
+
+
+_DB_URL = _test_db_url()
 
 # ------------------------------------------------------------------
 # Datenbank-Setup (einmalig pro Test-Session)
@@ -27,13 +54,14 @@ _DB_URL = os.getenv(
 @pytest.fixture(scope="session")
 def test_engine():
     """Session-scoped Engine auf die warevision-Datenbank."""
+    _ensure_database(_DB_URL)
     engine = create_engine(_DB_URL, pool_pre_ping=True)
 
-    # Alle Modelle registrieren (Tabellen existieren bereits)
+    # Alle Modelle registrieren und Tabellen anlegen (leere Testdatenbank)
     from app.core.database import Base
     from app.core.database import init_db as _register_models
     _register_models()
-    Base.metadata.create_all(bind=engine)  # no-op wenn Tabellen existieren
+    Base.metadata.create_all(bind=engine)  # legt fehlende Tabellen an
 
     yield engine
     engine.dispose()
@@ -231,3 +259,66 @@ def sample_invoice(db, sample_customer, admin_user):
     db.add(item)
     db.flush()
     return inv
+
+
+# ------------------------------------------------------------------
+# Zusätzliche Daten-Fixtures (Angebote, Inventur, E-Rechnung)
+# ------------------------------------------------------------------
+
+@pytest.fixture()
+def sample_article(db):
+    """Lagerartikel mit Bestand 10, EK 20 €, VK 35 € (B2C) / 30 € (B2B)."""
+    from app.models.article import Article
+
+    a = Article(
+        article_number="TEST-ART-001",
+        name="Bremsbeläge Test",
+        purchase_price=Decimal("20.00"),
+        sales_price_b2c=Decimal("35.00"),
+        sales_price_b2b=Decimal("30.00"),
+        vat_rate=Decimal("19.00"),
+        stock_quantity=10,
+        minimum_stock=2,
+        barcode="4000000000017",
+    )
+    db.add(a)
+    db.flush()
+    return a
+
+
+@pytest.fixture()
+def b2b_customer(db):
+    """Händlerkunde mit Rechnungsadresse und USt-IdNr."""
+    from app.models.customer import Customer, CustomerAddress
+
+    c = Customer(customer_type="B2B", company_name="Teile Händler GmbH", email="einkauf@haendler.test",
+                 vat_id="DE987654321")
+    db.add(c)
+    db.flush()
+    db.add(CustomerAddress(customer_id=c.id, address_type="billing", street="Industriestraße",
+                           house_number="5", postal_code="96050", city="Bamberg", country="Deutschland"))
+    db.flush()
+    return c
+
+
+@pytest.fixture()
+def company_settings(db):
+    """Firmendaten für Rechnung/E-Rechnung (Adresse zweizeilig, IBAN gültig)."""
+    from app.models.app_setting import AppSetting
+
+    values = {
+        "company_name": "Quad Paradies Test",
+        "company_address": "Musterstraße 99\n96191 Viereth",
+        "company_vat_id": "DE123456789",
+        "company_email": "info@quad.test",
+        "company_bank_iban": "DE02120300000000202051",
+        "company_bank_account_holder": "Quad Paradies Test",
+    }
+    for k, v in values.items():
+        row = db.query(AppSetting).filter(AppSetting.key == k).first()
+        if row:
+            row.value = v
+        else:
+            db.add(AppSetting(key=k, value=v))
+    db.flush()
+    return values
