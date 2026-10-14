@@ -1,10 +1,10 @@
 # Erste Schritte
 
 ## Anmelden, Abmelden und Passwort ändern
-Melde dich mit deiner E-Mail-Adresse und deinem Passwort an. Rechts oben findest du „Passwort ändern“, „Meine Daten exportieren“ und „Abmelden“. Nach 24 Stunden musst du dich neu anmelden.
+Melde dich mit deiner E-Mail-Adresse und deinem Passwort an. Rechts oben auf deinen Namen klicken: Dort findest du „Passwort ändern“, „Meine Daten exportieren“ und „Abmelden“. Nach 24 Stunden musst du dich neu anmelden.
 
 ## Navigation
-Die Bereiche erreichst du über das Menü oben: Dashboard, Kunden, Fahrzeuge, Artikel, Lieferanten, Lager, Inventur, Angebote, Werkstattaufträge, Wartungspläne, Terminplaner, Rechnungen, Dokumente und Hilfe. Admins sehen zusätzlich Benutzer, Buchhaltung, Einstellungen und Audit-Log. Auf dem Smartphone öffnest du das Menü über das Symbol ☰.
+Die Bereiche erreichst du über die Seitenleiste links, nach Themen gruppiert: Dashboard; Werkstatt (Terminplaner, Werkstattaufträge, Angebote, Wartungspläne); Kunden (Kunden, Fahrzeuge); Lager & Einkauf (Artikel, Lager, Bestellungen, Lieferanten, Inventur); Finanzen (Rechnungen, Buchhaltung); Ablage (Dokumente). Admins sehen zusätzlich Verwaltung (Benutzer, Einstellungen, Audit-Log) und Buchhaltung. „Hilfe“ steht ganz unten. Der aktuelle Bereich ist farbig markiert. Auf Smartphone und Tablet öffnest du die Seitenleiste über das Symbol ☰.
 
 ## Dashboard
 Das Dashboard zeigt Kennzahlen auf einen Blick: Anzahl Kunden, offene Werkstattaufträge, Termine heute und diese Woche, Rechnungen, überfällige Rechnungen, Artikel unter Mindestbestand, Dokumente, Wartungspläne und Benutzer. Ein Klick auf eine Kachel öffnet den jeweiligen Bereich.
