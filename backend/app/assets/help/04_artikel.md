@@ -4,7 +4,7 @@
 „+ Neuer Artikel“: Pflicht sind Artikelnummer und Bezeichnung. Außerdem: Barcode (EAN/GTIN), Kategorie, Lieferant, Lagerort, Beschreibung, Einkaufspreis (EK), Verkaufspreise B2C und B2B, MwSt-Satz, Mindestbestand, Zielbestand, Artikelnummer beim Lieferanten, Hersteller des Teils (Marke, z. B. NGK oder Original-Teil) und die Fahrzeugmodelle, zu denen der Artikel passt.
 
 ## Barcode und Kamera
-Im Feld „Barcode (Enter)“ kannst du mit einem Handscanner scannen. Mit „Kamera scannen“ nutzt du die Kamera von Tablet oder Smartphone.
+Im Feld „Barcode (Enter)“ kannst du mit einem Handscanner scannen. Mit „Kamera scannen“ nutzt du die Kamera (Notebook-Webcam, Tablet oder Smartphone): Barcode vor die Kamera halten, er wird automatisch erkannt. Klappt das nicht, „Foto aufnehmen“ klicken – dann wird das aktuelle Kamerabild nach dem Code durchsucht. „Bild auswählen“ liest den Code aus einem vorhandenen Foto. Die Kamera im Browser funktioniert nur über https oder direkt am Rechner (localhost).
 
 ## Lagerorte und Kategorien verwalten
 Über die Buttons „Lagerorte“ und „Kategorien“ legst du diese an, benennst sie um oder löschst sie. Lagerorte helfen bei der Inventur (Teilinventur je Lagerort).

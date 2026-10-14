@@ -65,4 +65,17 @@ describe('Fotos am Auftrag', () => {
     await waitFor(() => expect(api.deletePhoto).toHaveBeenCalledWith('o1', 'p1'))
     expect(await screen.findByText(/Noch keine Fotos/)).toBeInTheDocument()
   })
+
+  it('Notebook ohne https: verständlicher Hinweis statt Dateidialog', async () => {
+    api.listPhotos.mockResolvedValue([])
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true })
+    Object.defineProperty(navigator, 'maxTouchPoints', { value: 0, configurable: true })
+    render(<OrderPhotos orderId="o1" />)
+    await screen.findByText(/Noch keine Fotos/)
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
+    fireEvent.click(screen.getByRole('button', { name: 'Foto aufnehmen' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('nur, wenn WareVision über https')
+    expect(clickSpy).not.toHaveBeenCalled()
+    clickSpy.mockRestore()
+  })
 })

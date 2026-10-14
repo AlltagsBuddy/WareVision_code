@@ -215,6 +215,7 @@ export default function Articles() {
 
   const handleScanResult = useCallback((code: string) => {
     setBarcodeFilter(code.trim())
+    setBarcodeInput(code.trim())  // gescannten Code sichtbar machen
     setSearch('')
   }, [])
 

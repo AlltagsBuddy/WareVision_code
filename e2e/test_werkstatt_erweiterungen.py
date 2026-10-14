@@ -89,3 +89,24 @@ def test_passende_teile_filter(page, base_url):
     select.select_option(value)
     page.wait_for_url(f"**/articles?modell={value}")
     assert not page.js_errors
+
+
+def test_barcode_scanner_aufnehmen_und_auswaehlen_getrennt(page, base_url):
+    """Barcode-Scanner: „Foto aufnehmen“ nutzt die Kamera, „Bild auswählen“ öffnet den Dateidialog."""
+    if not base_url.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+        return
+    choosers = []
+    page.on("filechooser", lambda f: choosers.append(f))
+    page.goto(f"{base_url}/articles")
+    page.click("text=Kamera scannen")
+    page.wait_for_function("document.querySelector('.modal video') && document.querySelector('.modal video').videoWidth > 0", timeout=10000)
+    page.click("button:has-text('Foto aufnehmen')")
+    page.wait_for_selector("text=Kein Barcode/QR-Code im Bild gefunden")   # Testbild ohne Barcode
+    assert choosers == []                                                   # kein Dateidialog
+    page.wait_for_function("document.querySelector('.modal video') && document.querySelector('.modal video').videoWidth > 0", timeout=10000)
+    with page.expect_file_chooser() as fc:
+        page.click("button:has-text('Bild auswählen')")
+    assert fc.value is not None
+    page.click(".modal >> text=Abbrechen")
+    page.js_errors[:] = [e for e in page.js_errors if "Barcode aus Bild" not in e]
+    assert not page.js_errors

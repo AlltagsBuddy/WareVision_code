@@ -76,8 +76,13 @@ export default function OrderPhotos({ orderId }: { orderId: string }) {
   // Kamera direkt im Browser (auch Notebook-Webcam). Ohne sichere Verbindung (z. B. http über die
   // IP-Adresse vom Handy) erlaubt der Browser das nicht – dann öffnet das Handy seine Kamera-App.
   const startCamera = () => {
+    setError('')
     if (cameraSupported()) setCameraOpen(true)
-    else cameraRef.current?.click()
+    else if (navigator.maxTouchPoints > 0) cameraRef.current?.click()  // Handy/Tablet: Kamera-App
+    else setError(
+      'Die Kamera kann hier nicht genutzt werden: Der Browser erlaubt die Kamera nur, wenn WareVision über https '
+      + 'oder direkt am Rechner (localhost) geöffnet ist. Aktuelle Adresse: ' + window.location.origin
+      + '. Bitte „Bilder auswählen“ nutzen.')
   }
 
   const openPreview = (photo: Photo) => {
