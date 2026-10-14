@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { articlesApi, articleCategoriesApi, suppliersApi, manufacturersApi, storageLocationsApi } from '../api/client'
 import BarcodeScanner from '../components/BarcodeScanner'
 
@@ -11,6 +12,14 @@ export default function Articles() {
   const [storageLocations, setStorageLocations] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const modelFilter = searchParams.get('modell') || ''
+  const setModelFilter = (id: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (id) next.set('modell', id)
+    else next.delete('modell')
+    setSearchParams(next, { replace: true })
+  }
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeFilter, setBarcodeFilter] = useState('')
   const [scanModalOpen, setScanModalOpen] = useState(false)
@@ -34,6 +43,7 @@ export default function Articles() {
     minimum_stock: 0,
     target_stock: '' as string,
     supplier_article_number: '',
+    part_manufacturer: '',
     barcode: '',
     compatible_model_ids: [] as string[],
   })
@@ -75,18 +85,18 @@ export default function Articles() {
   useEffect(() => {
     setLoading(true)
     articlesApi
-      .list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, limit: PAGE_SIZE, skip: 0 })
+      .list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, vehicle_model_id: modelFilter || undefined, limit: PAGE_SIZE, skip: 0 })
       .then((data) => {
         setArticles(data)
         setHasMore(data.length === PAGE_SIZE)
       })
       .finally(() => setLoading(false))
-  }, [search, barcodeFilter, categoryFilter])
+  }, [search, barcodeFilter, categoryFilter, modelFilter])
 
   const handleLoadMore = async () => {
     setLoadingMore(true)
     try {
-      const more = await articlesApi.list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, limit: PAGE_SIZE, skip: articles.length })
+      const more = await articlesApi.list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, vehicle_model_id: modelFilter || undefined, limit: PAGE_SIZE, skip: articles.length })
       setArticles((prev) => [...prev, ...more])
       setHasMore(more.length === PAGE_SIZE)
     } finally {
@@ -123,6 +133,7 @@ export default function Articles() {
       minimum_stock: 0,
       target_stock: '',
       supplier_article_number: '',
+      part_manufacturer: '',
       barcode: '',
       compatible_model_ids: [],
     })
@@ -153,6 +164,7 @@ export default function Articles() {
           minimum_stock: form.minimum_stock,
           target_stock: form.target_stock === '' ? null : parseInt(form.target_stock, 10),
           supplier_article_number: form.supplier_article_number.trim() || null,
+          part_manufacturer: form.part_manufacturer.trim() || null,
           barcode: form.barcode || undefined,
           compatible_model_ids: form.compatible_model_ids,
         }
@@ -174,6 +186,7 @@ export default function Articles() {
           minimum_stock: form.minimum_stock,
           target_stock: form.target_stock === '' ? null : parseInt(form.target_stock, 10),
           supplier_article_number: form.supplier_article_number.trim() || null,
+          part_manufacturer: form.part_manufacturer.trim() || null,
           barcode: form.barcode || undefined,
           compatible_model_ids: form.compatible_model_ids,
         }
@@ -221,6 +234,7 @@ export default function Articles() {
       minimum_stock: a.minimum_stock,
       target_stock: a.target_stock != null ? String(a.target_stock) : '',
       supplier_article_number: a.supplier_article_number || '',
+      part_manufacturer: a.part_manufacturer || '',
       barcode: a.barcode || '',
       compatible_model_ids: (a.compatible_model_ids || []).map((id: any) => String(id)),
     })
@@ -342,7 +356,8 @@ export default function Articles() {
       <div className="toolbar">
         <input
           type="search"
-          placeholder="Artikelnummer oder Name..."
+          placeholder="Nr., Name, OEM, Hersteller..."
+          aria-label="Artikel suchen"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setBarcodeFilter('') }}
         />
@@ -355,6 +370,27 @@ export default function Articles() {
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
+        </select>
+        <select
+          value={modelFilter}
+          onChange={(e) => setModelFilter(e.target.value)}
+          className="select"
+          aria-label="Passend für Fahrzeugmodell"
+          style={{ maxWidth: 240 }}
+        >
+          <option value="">Alle Fahrzeugmodelle</option>
+          {manufacturers
+            .filter((m) => allModels.some((mod) => mod.manufacturer_id === m.id))
+            .map((m) => (
+              <optgroup key={m.id} label={m.name}>
+                {allModels.filter((mod) => mod.manufacturer_id === m.id).map((mod) => (
+                  <option key={mod.id} value={mod.id}>{m.name} {mod.name}{mod.variant ? ` ${mod.variant}` : ''}</option>
+                ))}
+              </optgroup>
+            ))}
+          {modelFilter && !allModels.some((mod) => mod.id === modelFilter) && (
+            <option value={modelFilter}>Gewähltes Modell</option>
+          )}
         </select>
         <input
           type="text"
@@ -425,6 +461,23 @@ export default function Articles() {
                     ))}
                   </select>
                 </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="art-part-maker">Hersteller des Teils (Marke)</label>
+                <input
+                  id="art-part-maker"
+                  list="art-part-maker-list"
+                  maxLength={150}
+                  placeholder="z. B. NGK, Motul, Original-Teil"
+                  value={form.part_manufacturer}
+                  onChange={(e) => setForm({ ...form, part_manufacturer: e.target.value })}
+                />
+                <datalist id="art-part-maker-list">
+                  {Array.from(new Set([
+                    ...manufacturers.map((m) => m.name),
+                    ...articles.map((a) => a.part_manufacturer).filter(Boolean),
+                  ])).sort().map((n) => <option key={n} value={n} />)}
+                </datalist>
               </div>
               <div className="form-group">
                 <label>Lagerort</label>
@@ -633,13 +686,14 @@ export default function Articles() {
             <tr>
               <th>Art.-Nr.</th>
               <th>Name</th>
+              <th>Hersteller</th>
               <th>Kategorie</th>
               <th>Lagerort</th>
               <th>Barcode</th>
               <th>Bestand</th>
               <th>EK</th>
               <th>VK B2C</th>
-              <th>Kompatible Modelle</th>
+              <th>Passend für Modelle</th>
               <th>Aktionen</th>
             </tr>
           </thead>
@@ -648,6 +702,7 @@ export default function Articles() {
               <tr key={a.id} className={a.minimum_stock > 0 && a.stock_quantity < a.minimum_stock ? 'warning-row' : ''}>
                 <td>{a.article_number}</td>
                 <td>{a.name}</td>
+                <td>{a.part_manufacturer || '–'}</td>
                 <td>{getCategoryName(a.category_id)}</td>
                 <td>{getStorageLocationName(a.storage_location_id)}</td>
                 <td>{a.barcode || '–'}</td>

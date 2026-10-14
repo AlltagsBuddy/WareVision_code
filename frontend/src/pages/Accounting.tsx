@@ -85,6 +85,7 @@ export default function Accounting() {
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState('')
   const [listLoaded, setListLoaded] = useState(false)
+  const [listSearch, setListSearch] = useState('')
 
   const [previewingId, setPreviewingId] = useState<string | null>(null)
   const previewBlobUrl = useRef<string | null>(null)
@@ -325,11 +326,18 @@ export default function Accounting() {
   const formatEuro = (val: number | string) =>
     Number(val).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 
-  const b2cInvoices = invoices.filter((inv) => {
+  const lq = listSearch.trim().toLowerCase()
+  const matchesOutgoing = (inv: any) =>
+    !lq || [inv.invoice_number, getCustomerName(inv.customer_id), inv.notes].some((v) => (v || '').toLowerCase().includes(lq))
+  const filteredInvoices = invoices.filter(matchesOutgoing)
+  const filteredIncoming = incomingList.filter((i) =>
+    !lq || [i.supplier_name, i.invoice_number, i.category, i.notes].some((v) => (v || '').toLowerCase().includes(lq)))
+
+  const b2cInvoices = filteredInvoices.filter((inv) => {
     const c = customers.find((x) => x.id === inv.customer_id)
     return c?.customer_type === 'B2C'
   })
-  const b2bInvoices = invoices.filter((inv) => {
+  const b2bInvoices = filteredInvoices.filter((inv) => {
     const c = customers.find((x) => x.id === inv.customer_id)
     return c?.customer_type === 'B2B'
   })
@@ -337,7 +345,7 @@ export default function Accounting() {
   const isCustomValid = preset !== 'custom' || (customFrom !== '' && customTo !== '')
 
   const tabCounts = listLoaded
-    ? { b2c: b2cInvoices.length, b2b: b2bInvoices.length, incoming: incomingList.length }
+    ? { b2c: b2cInvoices.length, b2b: b2bInvoices.length, incoming: filteredIncoming.length }
     : { b2c: 0, b2b: 0, incoming: 0 }
 
   return (
@@ -405,6 +413,15 @@ export default function Accounting() {
       {/* Konto-Tabs + Listen */}
       {listLoaded && (
         <div style={{ marginTop: '1.5rem' }}>
+          <div className="toolbar" style={{ marginBottom: '0.75rem' }}>
+            <input
+              type="search"
+              placeholder="In der Liste suchen: Nummer, Kunde, Lieferant..."
+              aria-label="Belege im Zeitraum suchen"
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+            />
+          </div>
           {/* Tab-Navigation */}
           <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--color-border)', marginBottom: '1rem' }}>
             {([
@@ -578,7 +595,7 @@ export default function Accounting() {
 
               <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={handleFileUpload} />
 
-              {incomingList.length === 0 ? (
+              {filteredIncoming.length === 0 ? (
                 <p className="muted">Keine Eingangsrechnungen in diesem Zeitraum.</p>
               ) : (
                 <table className="table">
@@ -596,7 +613,7 @@ export default function Accounting() {
                     </tr>
                   </thead>
                   <tbody>
-                    {incomingList.map((inv) => (
+                    {filteredIncoming.map((inv) => (
                       <tr key={inv.id}>
                         <td>
                           <code>{inv.invoice_number}</code>
@@ -674,7 +691,7 @@ export default function Accounting() {
                     <tr>
                       <td colSpan={5} style={{ fontWeight: 600, paddingTop: '0.75rem' }}>Gesamt</td>
                       <td style={{ textAlign: 'right', fontWeight: 600, paddingTop: '0.75rem' }}>
-                        {formatEuro(incomingList.reduce((s, i) => s + Number(i.gross_amount), 0))}
+                        {formatEuro(filteredIncoming.reduce((s, i) => s + Number(i.gross_amount), 0))}
                       </td>
                       <td colSpan={3}></td>
                     </tr>

@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
 import { appointmentsApi, customersApi, vehiclesApi } from '../api/client'
+import { useDebounced } from '../hooks/useDebounced'
+
+const APT_STATUS_LABELS: Record<string, string> = {
+  planned: 'Geplant',
+  confirmed: 'Bestätigt',
+  rescheduled: 'Verschoben',
+  cancelled: 'Storniert',
+  completed: 'Erledigt',
+}
 
 const TYPE_LABELS: Record<string, string> = {
   workshop: 'Werkstatt',
@@ -84,6 +93,35 @@ export default function Appointments() {
   const [emailNotice, setEmailNotice] = useState('')
   const [cancelError, setCancelError] = useState('')
   const [tmWarning, setTmWarning] = useState('')
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search.trim())
+  const [searchResults, setSearchResults] = useState<any[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+
+  // Suche über alle Termine (nicht nur die angezeigte Woche)
+  useEffect(() => {
+    if (debouncedSearch.length < 2) {
+      setSearchResults(null)
+      return
+    }
+    let active = true
+    setSearchLoading(true)
+    appointmentsApi
+      .list({ search: debouncedSearch, limit: 100 })
+      .then((r) => active && setSearchResults(r))
+      .catch(() => active && setSearchResults([]))
+      .finally(() => active && setSearchLoading(false))
+    return () => {
+      active = false
+    }
+  }, [debouncedSearch])
+
+  const jumpToWeek = (iso: string) => {
+    const d = new Date(iso)
+    d.setHours(0, 0, 0, 0)
+    setWeekStart(d)
+    setSearch('')
+  }
 
   const weekDates = getWeekDates(weekStart)
   const fromDate = new Date(weekDates[0])
@@ -427,6 +465,13 @@ export default function Appointments() {
             {weekDates[6].toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}
           </span>
         </div>
+        <input
+          type="search"
+          placeholder="Termin suchen: Kunde, Kennzeichen, Titel..."
+          aria-label="Termine suchen"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
           + Neuer Termin
         </button>
@@ -434,6 +479,45 @@ export default function Appointments() {
           Extern importieren
         </button>
       </div>
+
+      {searchResults !== null && (
+        <div className="table-wrapper" style={{ marginBottom: '1rem' }} aria-label="Suchergebnisse">
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+            {searchLoading ? 'Suche…' : `${searchResults.length} Termin(e) gefunden${searchResults.length === 100 ? ' (die ersten 100)' : ''}`}
+          </p>
+          {searchResults.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Zeit</th>
+                  <th>Titel</th>
+                  <th>Kunde</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchResults.map((a) => (
+                  <tr key={a.id}>
+                    <td>{new Date(a.starts_at).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                    <td>{formatTime(a.starts_at)}–{formatTime(a.ends_at)}</td>
+                    <td>{a.title || TYPE_LABELS[a.appointment_type] || '–'}</td>
+                    <td>{getDisplayName(a)}</td>
+                    <td>{APT_STATUS_LABELS[a.status] || a.status}</td>
+                    <td>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => jumpToWeek(a.starts_at)}>Zur Woche</button>
+                      {a.status !== 'cancelled' && (
+                        <button type="button" className="btn-secondary btn-sm" onClick={() => handleEditClick(a)}>Bearbeiten</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {emailNotice && (
         <div

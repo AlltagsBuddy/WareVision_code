@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { maintenancePlansApi, manufacturersApi, articlesApi } from '../api/client'
+import { buildYearLabel } from '../utils/buildYear'
 
 export default function MaintenancePlans() {
   const [plans, setPlans] = useState<any[]>([])
@@ -21,6 +22,8 @@ export default function MaintenancePlans() {
     interval_km: '',
     interval_hours: '',
     interval_months: '',
+    build_year_from: '',
+    build_year_to: '',
   })
   const [detailPlan, setDetailPlan] = useState<any | null>(null)
   const [tasks, setTasks] = useState<any[]>([])
@@ -29,7 +32,7 @@ export default function MaintenancePlans() {
   const [taskForm, setTaskForm] = useState({ name: '', description: '', article_id: '', quantity: '1', unit: 'Stück' })
   const [taskSubmitting, setTaskSubmitting] = useState(false)
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', description: '', interval_km: '', interval_hours: '', interval_months: '' })
+  const [editForm, setEditForm] = useState({ name: '', description: '', interval_km: '', interval_hours: '', interval_months: '', build_year_from: '', build_year_to: '' })
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editError, setEditError] = useState('')
   const [editTaskId, setEditTaskId] = useState<string | null>(null)
@@ -83,6 +86,8 @@ export default function MaintenancePlans() {
         interval_km: form.interval_km ? parseInt(form.interval_km, 10) : undefined,
         interval_hours: form.interval_hours ? parseInt(form.interval_hours, 10) : undefined,
         interval_months: form.interval_months ? parseInt(form.interval_months, 10) : undefined,
+        build_year_from: form.build_year_from ? parseInt(form.build_year_from, 10) : undefined,
+        build_year_to: form.build_year_to ? parseInt(form.build_year_to, 10) : undefined,
       })
       setShowForm(false)
       setForm({
@@ -93,6 +98,8 @@ export default function MaintenancePlans() {
         interval_km: '',
         interval_hours: '',
         interval_months: '',
+        build_year_from: '',
+        build_year_to: '',
       })
       load()
     } catch (err) {
@@ -122,6 +129,8 @@ export default function MaintenancePlans() {
       interval_km: detailPlan.interval_km != null ? String(detailPlan.interval_km) : '',
       interval_hours: detailPlan.interval_hours != null ? String(detailPlan.interval_hours) : '',
       interval_months: detailPlan.interval_months != null ? String(detailPlan.interval_months) : '',
+      build_year_from: detailPlan.build_year_from != null ? String(detailPlan.build_year_from) : '',
+      build_year_to: detailPlan.build_year_to != null ? String(detailPlan.build_year_to) : '',
     })
     setEditError('')
     setEditMode(true)
@@ -141,6 +150,8 @@ export default function MaintenancePlans() {
         interval_km: editForm.interval_km ? parseInt(editForm.interval_km, 10) : undefined,
         interval_hours: editForm.interval_hours ? parseInt(editForm.interval_hours, 10) : undefined,
         interval_months: editForm.interval_months ? parseInt(editForm.interval_months, 10) : undefined,
+        build_year_from: editForm.build_year_from ? parseInt(editForm.build_year_from, 10) : null,
+        build_year_to: editForm.build_year_to ? parseInt(editForm.build_year_to, 10) : null,
       })
       setDetailPlan(updated)
       setEditMode(false)
@@ -414,6 +425,19 @@ export default function MaintenancePlans() {
                   />
                 </div>
               </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="mp-year-from">Baujahr von</label>
+                  <input id="mp-year-from" type="number" min={1900} max={2100} value={form.build_year_from}
+                    onChange={(e) => setForm({ ...form, build_year_from: e.target.value })} placeholder="leer = alle" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="mp-year-to">Baujahr bis</label>
+                  <input id="mp-year-to" type="number" min={1900} max={2100} value={form.build_year_to}
+                    onChange={(e) => setForm({ ...form, build_year_to: e.target.value })} placeholder="z.B. 2012 für ältere Fahrzeuge" />
+                </div>
+              </div>
+              <p style={{ marginTop: 0, fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Ohne Baujahr gilt der Plan für alle Baujahre. Passt ein Plan mit Baujahr, wird er bevorzugt.</p>
               {error && <p className="error">{error}</p>}
               <div className="form-actions">
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Abbrechen</button>
@@ -436,6 +460,7 @@ export default function MaintenancePlans() {
               <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>Name{sortIcon('name')}</th>
               <th onClick={() => handleSort('manufacturer')} style={{ cursor: 'pointer' }}>Hersteller{sortIcon('manufacturer')}</th>
               <th>Modell</th>
+              <th>Baujahre</th>
               <th>Intervall</th>
               <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer' }}>Erstellt{sortIcon('created_at')}</th>
             </tr>
@@ -446,6 +471,7 @@ export default function MaintenancePlans() {
                 <td><strong>{p.name}</strong></td>
                 <td>{getManufacturerName(p.manufacturer_id)}</td>
                 <td>{p.vehicle_model_id ? getModelName(p.manufacturer_id, p.vehicle_model_id) : '–'}</td>
+                <td>{buildYearLabel(p)}</td>
                 <td>
                   {[p.interval_km && `${p.interval_km} km`, p.interval_hours && `${p.interval_hours} h`, p.interval_months && `${p.interval_months} Mon.`]
                     .filter(Boolean)
@@ -511,6 +537,18 @@ export default function MaintenancePlans() {
                       />
                     </div>
                   </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="mp-edit-year-from">Baujahr von</label>
+                      <input id="mp-edit-year-from" type="number" min={1900} max={2100} value={editForm.build_year_from}
+                        onChange={(e) => setEditForm({ ...editForm, build_year_from: e.target.value })} placeholder="leer = alle" />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="mp-edit-year-to">Baujahr bis</label>
+                      <input id="mp-edit-year-to" type="number" min={1900} max={2100} value={editForm.build_year_to}
+                        onChange={(e) => setEditForm({ ...editForm, build_year_to: e.target.value })} placeholder="leer = alle" />
+                    </div>
+                  </div>
                   {editError && <p className="error">{editError}</p>}
                   <div className="form-actions">
                     <button type="button" onClick={() => setEditMode(false)} className="btn-secondary">Abbrechen</button>
@@ -523,7 +561,8 @@ export default function MaintenancePlans() {
                 <h2>{detailPlan.name}</h2>
                 <p>
                   <strong>Hersteller:</strong> {getManufacturerName(detailPlan.manufacturer_id)} &nbsp;
-                  <strong>Modell:</strong> {detailPlan.vehicle_model_id ? getModelName(detailPlan.manufacturer_id, detailPlan.vehicle_model_id) : '–'}
+                  <strong>Modell:</strong> {detailPlan.vehicle_model_id ? getModelName(detailPlan.manufacturer_id, detailPlan.vehicle_model_id) : '–'} &nbsp;
+                  <strong>Baujahre:</strong> {buildYearLabel(detailPlan)}
                 </p>
                 {detailPlan.description && <p>{detailPlan.description}</p>}
 
@@ -725,3 +764,4 @@ export default function MaintenancePlans() {
     </div>
   )
 }
+

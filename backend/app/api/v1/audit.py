@@ -5,6 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import Text, cast, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin
@@ -22,11 +23,22 @@ def list_audit_logs(
     entity_type: str | None = None,
     entity_id: UUID | None = None,
     action: str | None = None,
+    search: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ) -> list[dict]:
-    """List audit logs (admin only)."""
+    """List audit logs (admin only). search durchsucht Bereich, Aktion, Benutzer und geänderte Werte."""
     query = db.query(AuditLog)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        user_ids = select(User.id).where(User.email.ilike(term) | User.first_name.ilike(term) | User.last_name.ilike(term))
+        query = query.filter(
+            AuditLog.entity_type.ilike(term)
+            | AuditLog.action.ilike(term)
+            | AuditLog.user_id.in_(user_ids)
+            | cast(AuditLog.old_values, Text).ilike(term)
+            | cast(AuditLog.new_values, Text).ilike(term)
+        )
     if entity_type:
         query = query.filter(AuditLog.entity_type == entity_type)
     if entity_id:

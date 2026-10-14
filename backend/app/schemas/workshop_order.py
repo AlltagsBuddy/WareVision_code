@@ -92,3 +92,22 @@ class WorkshopOrderRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class WorkshopOrderPhotoRead(BaseModel):
+    """Foto zum Werkstattauftrag."""
+
+    id: UUID
+    workshop_order_id: UUID
+    filename: str
+    content_type: str
+    file_size: int
+    caption: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WorkshopOrderPhotoUpdate(BaseModel):
+    caption: Optional[str] = None

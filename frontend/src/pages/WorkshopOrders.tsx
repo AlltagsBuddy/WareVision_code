@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { workshopOrdersApi, customersApi, vehiclesApi, articlesApi, appointmentsApi, manufacturersApi, maintenancePlansApi, laborRatesApi } from '../api/client'
+import { buildYearLabel } from '../utils/buildYear'
 import PreviewModal from '../components/PreviewModal'
+import OrderPhotos from '../components/OrderPhotos'
 
 // Wiederverwendbare Suchbox: Dropdown wird via Portal am body gerendert (umgeht Modal-Overflow/Stacking)
 function ComboBox({
@@ -562,7 +564,9 @@ export default function WorkshopOrders() {
                     .filter((p: any) => !form.manufacturer_id || p.manufacturer_id === form.manufacturer_id)
                     .map((p: any) => {
                       const manu = manufacturers.find((m: any) => m.id === p.manufacturer_id)
-                      return { value: p.id, label: p.name, sub: manu?.name || undefined }
+                      const years = buildYearLabel(p)
+                      const sub = [manu?.name, years !== 'alle' ? `Baujahr ${years}` : ''].filter(Boolean).join(' · ')
+                      return { value: p.id, label: p.name, sub: sub || undefined }
                     })}
                   value={form.maintenance_plan_id}
                   onChange={(v) => setForm({ ...form, maintenance_plan_id: v })}
@@ -1025,6 +1029,8 @@ export default function WorkshopOrders() {
                 </div>
               </form>
             )}
+
+            <OrderPhotos orderId={detailOrder.id} />
 
             <div className="form-actions" style={{ marginTop: '1.5rem' }}>
               <button type="button" onClick={openPdfPreview} className="btn-secondary">

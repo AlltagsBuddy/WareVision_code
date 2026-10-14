@@ -153,8 +153,9 @@ export const settingsApi = {
 }
 
 export const auditApi = {
-  list: (params?: { entity_type?: string; entity_id?: string; action?: string; skip?: number; limit?: number }) => {
+  list: (params?: { entity_type?: string; entity_id?: string; action?: string; search?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
+    if (params?.search) p.set('search', params.search)
     if (params?.entity_type) p.set('entity_type', params.entity_type)
     if (params?.entity_id) p.set('entity_id', params.entity_id)
     if (params?.action) p.set('action', params.action)
@@ -241,11 +242,12 @@ export const manufacturersApi = {
 }
 
 export const articlesApi = {
-  list: (params?: { search?: string; barcode?: string; category_id?: string; skip?: number; limit?: number }) => {
+  list: (params?: { search?: string; barcode?: string; category_id?: string; vehicle_model_id?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
     if (params?.search) p.set('search', params.search)
     if (params?.barcode) p.set('barcode', params.barcode)
     if (params?.category_id) p.set('category_id', params.category_id)
+    if (params?.vehicle_model_id) p.set('vehicle_model_id', params.vehicle_model_id)
     if (params?.skip != null) p.set('skip', String(params.skip))
     if (params?.limit != null) p.set('limit', String(params.limit))
     return api<any[]>('/articles?' + p)
@@ -327,10 +329,12 @@ export const appointmentsApi = {
     to_date?: string
     customer_id?: string
     status_filter?: string
+    search?: string
     skip?: number
     limit?: number
   }) => {
     const p = new URLSearchParams()
+    if (params?.search) p.set('search', params.search)
     if (params?.from_date) p.set('from_date', params.from_date)
     if (params?.to_date) p.set('to_date', params.to_date)
     if (params?.customer_id) p.set('customer_id', params.customer_id)
@@ -570,8 +574,9 @@ export const archiveApi = {
 }
 
 export const incomingInvoicesApi = {
-  list: (params?: { date_from?: string; date_to?: string; status_filter?: string; skip?: number; limit?: number }) => {
+  list: (params?: { date_from?: string; date_to?: string; status_filter?: string; search?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
+    if (params?.search) p.set('search', params.search)
     if (params?.date_from) p.set('date_from', params.date_from)
     if (params?.date_to) p.set('date_to', params.date_to)
     if (params?.status_filter) p.set('status_filter', params.status_filter)
@@ -661,9 +666,11 @@ export const maintenancePlansApi = {
     interval_km?: number
     interval_hours?: number
     interval_months?: number
+    build_year_from?: number | null
+    build_year_to?: number | null
   }) => api<any>('/maintenance-plans', { method: 'POST', body: JSON.stringify(data) }),
   get: (id: string) => api<any>(`/maintenance-plans/${id}`),
-  update: (id: string, data: { name?: string; description?: string; interval_km?: number; interval_hours?: number; interval_months?: number }) =>
+  update: (id: string, data: { name?: string; description?: string; interval_km?: number; interval_hours?: number; interval_months?: number; vehicle_model_id?: string | null; build_year_from?: number | null; build_year_to?: number | null }) =>
     api<any>(`/maintenance-plans/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) =>
     api<void>(`/maintenance-plans/${id}`, { method: 'DELETE' }),
@@ -698,6 +705,35 @@ export const maintenancePlansApi = {
 }
 
 export const workshopOrdersApi = {
+  listPhotos: (orderId: string) => api<any[]>(`/workshop-orders/${orderId}/photos`),
+  uploadPhoto: async (orderId: string, file: File, caption?: string): Promise<any> => {
+    const token = getToken()
+    const formData = new FormData()
+    formData.append('file', file)
+    if (caption) formData.append('caption', caption)
+    const res = await fetch(`${API_BASE}/workshop-orders/${orderId}/photos`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Foto konnte nicht hochgeladen werden')
+    }
+    return res.json()
+  },
+  getPhotoBlob: async (orderId: string, photoId: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/workshop-orders/${orderId}/photos/${photoId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Foto konnte nicht geladen werden')
+    return res.blob()
+  },
+  updatePhoto: (orderId: string, photoId: string, caption: string) =>
+    api<any>(`/workshop-orders/${orderId}/photos/${photoId}`, { method: 'PATCH', body: JSON.stringify({ caption }) }),
+  deletePhoto: (orderId: string, photoId: string) =>
+    api<void>(`/workshop-orders/${orderId}/photos/${photoId}`, { method: 'DELETE' }),
   list: (params?: { customer_id?: string; vehicle_id?: string; status_filter?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
     if (params?.customer_id) p.set('customer_id', params.customer_id)

@@ -5,7 +5,12 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
+
+
+def _validate_year_range(year_from: Optional[int], year_to: Optional[int]) -> None:
+    if year_from is not None and year_to is not None and year_from > year_to:
+        raise ValueError("Baujahr von darf nicht größer als Baujahr bis sein")
 
 
 class MaintenanceTaskCreate(BaseModel):
@@ -58,6 +63,13 @@ class MaintenancePlanCreate(BaseModel):
     interval_km: Optional[int] = None
     interval_hours: Optional[int] = None
     interval_months: Optional[int] = None
+    build_year_from: Optional[int] = Field(default=None, ge=1900, le=2100)
+    build_year_to: Optional[int] = Field(default=None, ge=1900, le=2100)
+
+    @model_validator(mode="after")
+    def _check_years(self):
+        _validate_year_range(self.build_year_from, self.build_year_to)
+        return self
 
 
 class MaintenancePlanUpdate(BaseModel):
@@ -68,6 +80,9 @@ class MaintenancePlanUpdate(BaseModel):
     interval_km: Optional[int] = None
     interval_hours: Optional[int] = None
     interval_months: Optional[int] = None
+    vehicle_model_id: Optional[UUID] = None
+    build_year_from: Optional[int] = Field(default=None, ge=1900, le=2100)
+    build_year_to: Optional[int] = Field(default=None, ge=1900, le=2100)
 
 
 class MaintenancePlanRead(BaseModel):
@@ -83,6 +98,8 @@ class MaintenancePlanRead(BaseModel):
     interval_km: Optional[int] = None
     interval_hours: Optional[int] = None
     interval_months: Optional[int] = None
+    build_year_from: Optional[int] = None
+    build_year_to: Optional[int] = None
     created_at: datetime
 
     @classmethod

@@ -261,8 +261,23 @@ def dsgvo_delete_customer(
             apt.external_booking_id = None
             apt.title = None
             apt.description = None
-        log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_anonymize")
+        # DSGVO: Fotos zu den Aufträgen (zeigen oft Kennzeichen/FIN) löschen – sie sind keine Buchungsbelege
+        from app.models.workshop_order_photo import WorkshopOrderPhoto
+        photo_paths = []
+        order_ids = [o.id for o in db.query(WorkshopOrder.id).filter(WorkshopOrder.customer_id == customer_id).all()]
+        if order_ids:
+            for photo in db.query(WorkshopOrderPhoto).filter(WorkshopOrderPhoto.workshop_order_id.in_(order_ids)).all():
+                photo_paths.append(photo.file_path)
+                db.delete(photo)
+        log_audit(db, user_id=current_user.id, entity_type="customer", entity_id=customer_id, action="dsgvo_anonymize",
+                  new_values={"deleted_photos": len(photo_paths)} if photo_paths else None)
         db.commit()
+        import os
+        for path in photo_paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
         return {"action": "anonymized", "reason": "Rechnungen oder Aufträge vorhanden (GoBD)"}
     else:
         for apt in db.query(Appointment).filter(Appointment.customer_id == customer_id).all():

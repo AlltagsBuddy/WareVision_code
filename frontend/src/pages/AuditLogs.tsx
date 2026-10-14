@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { auditApi } from '../api/client'
+import { useDebounced } from '../hooks/useDebounced'
 
 const ACTION_LABELS: Record<string, string> = {
   create: 'Erstellt',
@@ -17,6 +18,12 @@ const ACTION_LABELS: Record<string, string> = {
   webhook_termin_marktplatz_error: 'Terminmarktplatz: Fehler',
   termin_marktplatz_cancel_notify: 'Terminmarktplatz: Storno-Benachrichtigung',
   termin_marktplatz_cancel_skip: 'Terminmarktplatz: Storno (ohne Callback)',
+  cancel: 'Storniert',
+  archive: 'Archiviert (Original)',
+  archive_backfill: 'Archiviert (nachträglich)',
+  photo_add: 'Foto hinzugefügt',
+  photo_delete: 'Foto entfernt',
+  item_delete: 'Position entfernt',
 }
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -24,6 +31,10 @@ const ENTITY_LABELS: Record<string, string> = {
   document: 'Dokument',
   customer: 'Kunde',
   appointment: 'Termin',
+  workshop_order: 'Werkstattauftrag',
+  article: 'Artikel',
+  quote: 'Angebot',
+  purchase_order: 'Bestellung',
 }
 
 export default function AuditLogs() {
@@ -31,6 +42,8 @@ export default function AuditLogs() {
   const [loading, setLoading] = useState(true)
   const [entityFilter, setEntityFilter] = useState<string>('')
   const [actionFilter, setActionFilter] = useState<string>('')
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search.trim())
 
   useEffect(() => {
     setLoading(true)
@@ -38,12 +51,13 @@ export default function AuditLogs() {
       .list({
         entity_type: entityFilter || undefined,
         action: actionFilter || undefined,
+        search: debouncedSearch || undefined,
         limit: 200,
       })
       .then(setLogs)
       .catch(() => setLogs([]))
       .finally(() => setLoading(false))
-  }, [entityFilter, actionFilter])
+  }, [entityFilter, actionFilter, debouncedSearch])
 
   const formatDate = (d: string) => {
     try {
@@ -66,6 +80,13 @@ export default function AuditLogs() {
         Protokollierung von Änderungen für GoBD/DSGVO-Konformität. Nur für Administratoren sichtbar.
       </p>
       <div className="toolbar">
+        <input
+          type="search"
+          placeholder="Suchen: Benutzer, Nummer, Wert..."
+          aria-label="Audit-Log durchsuchen"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <select
           value={entityFilter}
           onChange={(e) => setEntityFilter(e.target.value)}

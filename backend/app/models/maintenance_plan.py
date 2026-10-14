@@ -42,6 +42,9 @@ class MaintenancePlan(BaseModel):
     interval_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
     interval_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     interval_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Optionaler Baujahr-Bereich (z. B. eigener Plan für ältere Fahrzeuge); leer = alle Baujahre
+    build_year_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    build_year_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     manufacturer = relationship("Manufacturer", back_populates="maintenance_plans")
     vehicle_model = relationship("VehicleModel", back_populates="maintenance_plans")

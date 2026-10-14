@@ -73,6 +73,8 @@ class Article(BaseModel):
     barcode: Mapped[str | None] = mapped_column(String(255), nullable=True)
     qr_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     oem_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Marke/Hersteller des Teils (z. B. NGK, Motul, Original-Teil)
+    part_manufacturer: Mapped[str | None] = mapped_column(String(150), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

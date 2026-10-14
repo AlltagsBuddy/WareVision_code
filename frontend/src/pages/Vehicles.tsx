@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { vehiclesApi, customersApi, manufacturersApi, workshopOrdersApi, storageLocationsApi } from '../api/client'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -372,6 +373,11 @@ export default function Vehicles() {
                 <td>{v.created_at ? new Date(v.created_at).toLocaleDateString('de-DE') : '–'}</td>
                 <td>
                   <button type="button" onClick={() => openDetail(v)} className="btn-secondary btn-sm">Historie</button>
+                  {v.vehicle_model_id && (
+                    <Link to={`/articles?modell=${v.vehicle_model_id}`} className="btn-secondary btn-sm" title="Artikel, die zu diesem Modell passen">
+                      Passende Teile
+                    </Link>
+                  )}
                   <button type="button" onClick={() => openEdit(v)} className="btn-secondary btn-sm">Bearbeiten</button>
                   <button type="button" onClick={() => handleDelete(v)} className="btn-secondary btn-sm">Löschen</button>
                 </td>

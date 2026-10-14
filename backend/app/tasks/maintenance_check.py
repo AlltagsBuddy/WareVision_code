@@ -31,7 +31,7 @@ def check_maintenance_intervals(self) -> dict:
     from app.core.database import SessionLocal
     from app.models.vehicle import Vehicle
     from app.models.workshop_order import WorkshopOrder
-    from app.models.maintenance_plan import MaintenancePlan
+    from app.services.maintenance_match import find_plan_for_vehicle
     from app.services.audit import log_audit
 
     db = SessionLocal()
@@ -44,22 +44,11 @@ def check_maintenance_intervals(self) -> dict:
         )
         count = 0
         for vehicle in vehicles:
-            # Passende Wartungspläne ermitteln
-            plans_query = db.query(MaintenancePlan)
-            if vehicle.vehicle_model_id:
-                plans_query = plans_query.filter(
-                    MaintenancePlan.vehicle_model_id == vehicle.vehicle_model_id
-                )
-            elif vehicle.manufacturer_id:
-                plans_query = plans_query.filter(
-                    MaintenancePlan.manufacturer_id == vehicle.manufacturer_id,
-                    MaintenancePlan.vehicle_model_id.is_(None),
-                )
-            else:
+            # Passenden Wartungsplan ermitteln (Modell, Hersteller, Baujahr)
+            best = find_plan_for_vehicle(db, vehicle)
+            if best is None:
                 continue
-            plans = plans_query.all()
-            if not plans:
-                continue
+            plans = [best]
 
             # Letzten abgeschlossenen Werkstattauftrag ermitteln
             last_order = (

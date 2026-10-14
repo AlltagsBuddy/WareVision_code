@@ -50,11 +50,15 @@ def list_incoming_invoices(
     date_from: date | None = None,
     date_to: date | None = None,
     status_filter: str | None = None,
+    search: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ) -> list[IncomingInvoice]:
-    """Eingangsrechnungen auflisten."""
+    """Eingangsrechnungen auflisten. search: Lieferant oder Rechnungsnummer."""
     q = db.query(IncomingInvoice)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        q = q.filter(IncomingInvoice.supplier_name.ilike(term) | IncomingInvoice.invoice_number.ilike(term))
     if date_from:
         q = q.filter(IncomingInvoice.invoice_date >= date_from)
     if date_to:

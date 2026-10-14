@@ -41,6 +41,7 @@ export default function Users() {
   const [permissions, setPermissions] = useState<PermMap>({ ...DEFAULT_PERMS })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     Promise.all([usersApi.list(), usersApi.roles()])
@@ -204,10 +205,24 @@ export default function Users() {
     )
   }
 
+  const sq = search.trim().toLowerCase()
+  const filteredUsers = sq
+    ? users.filter((u) =>
+        [u.first_name, u.last_name, `${u.first_name || ''} ${u.last_name || ''}`, u.email, u.role_name]
+          .some((v) => (v || '').toLowerCase().includes(sq)))
+    : users
+
   return (
     <div className="page">
       <h1>Benutzerverwaltung</h1>
       <div className="toolbar">
+        <input
+          type="search"
+          placeholder="Name, E-Mail, Rolle..."
+          aria-label="Benutzer suchen"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">
           + Neuer Benutzer
         </button>
@@ -381,7 +396,10 @@ export default function Users() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => {
+              {filteredUsers.length === 0 && (
+                <tr><td colSpan={7}>Keine Benutzer gefunden.</td></tr>
+              )}
+              {filteredUsers.map((u) => {
                 const isAdmin = u.role_name === 'admin'
                 const visibleCount = isAdmin
                   ? MODULES.length

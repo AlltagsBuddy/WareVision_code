@@ -25,19 +25,27 @@ def list_articles(
     search: str | None = None,
     barcode: str | None = None,
     category_id: UUID | None = None,
+    vehicle_model_id: UUID | None = None,
 ) -> list[ArticleRead]:
-    """Artikel auflisten. barcode für Scanner-Lookup, category_id für Kategoriefilter."""
+    """Artikel auflisten. barcode für Scanner-Lookup, category_id für Kategoriefilter,
+    vehicle_model_id = nur Artikel, die zu diesem Fahrzeugmodell passen."""
     query = db.query(Article).filter(Article.is_active == True)
     if barcode:
         query = query.filter(Article.barcode == barcode)
     else:
         if search:
+            term = f"%{search}%"
             query = query.filter(
-                Article.article_number.ilike(f"%{search}%")
-                | Article.name.ilike(f"%{search}%")
+                Article.article_number.ilike(term)
+                | Article.name.ilike(term)
+                | Article.oem_number.ilike(term)
+                | Article.supplier_article_number.ilike(term)
+                | Article.part_manufacturer.ilike(term)
             )
         if category_id:
             query = query.filter(Article.category_id == category_id)
+        if vehicle_model_id:
+            query = query.filter(Article.compatible_models.any(VehicleModel.id == vehicle_model_id))
     articles = query.order_by(Article.name).offset(skip).limit(limit).all()
     return [ArticleRead.from_orm_with_models(a) for a in articles]
 
@@ -73,6 +81,7 @@ def create_article(
         barcode=payload.barcode,
         qr_code=payload.qr_code,
         oem_number=payload.oem_number,
+        part_manufacturer=(payload.part_manufacturer or None),
         location_label=payload.location_label,
         storage_location_id=payload.storage_location_id,
     )

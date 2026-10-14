@@ -26,6 +26,7 @@ class ArticleCreate(BaseModel):
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
     oem_number: Optional[str] = None
+    part_manufacturer: Optional[str] = Field(default=None, max_length=150)
     location_label: Optional[str] = None
     storage_location_id: Optional[UUID] = None
     compatible_model_ids: list[UUID] = []
@@ -48,6 +49,7 @@ class ArticleUpdate(BaseModel):
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
     oem_number: Optional[str] = None
+    part_manufacturer: Optional[str] = Field(default=None, max_length=150)
     location_label: Optional[str] = None
     storage_location_id: Optional[UUID] = None
     is_active: Optional[bool] = None
@@ -74,6 +76,7 @@ class ArticleRead(BaseModel):
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
     oem_number: Optional[str] = None
+    part_manufacturer: Optional[str] = Field(default=None, max_length=150)
     location_label: Optional[str] = None
     storage_location_id: Optional[UUID] = None
     is_active: bool

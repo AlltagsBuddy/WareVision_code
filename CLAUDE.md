@@ -79,6 +79,11 @@ WareVision_code/
 | Rechnungskorrektur / Gutschrift (RK-…, Teilmengen, Nachlass, Lagerrücknahme) | ✅ | ✅ |
 | DATEV-Export (Buchungsstapel EXTF 700/v13, Debitoren/Kreditoren, SKR03/04) | ✅ | ✅ |
 | Belegarchiv GoBD (Originale mit SHA-256, Nachziehen, Prüfung; Backup inkl. Dateien) | ✅ | ✅ |
+| Fotos am Werkstattauftrag (Upload/Kamera, Beschreibung, Audit-Log, Löschen bei DSGVO-Anonymisierung) | ✅ | ✅ |
+| Wartungsplan mit Baujahr von/bis (automatische Auswahl Modell > Hersteller, Baujahr > alle) | ✅ | ✅ |
+| Artikel: Teile-Hersteller, Suche OEM/Lief.-Nr., Filter „passend für Modell“, „Passende Teile“ am Fahrzeug | ✅ | ✅ |
+| Suche in Terminen, Benutzern, Audit-Log und Buchhaltung | ✅ | ✅ |
+| Storno → Auftrag korrigieren → neue Rechnung (Verweis Rechnungsposition ON DELETE SET NULL) | ✅ | ✅ |
 | Dokumentenmanagement | ✅ | ✅ |
 | Audit-Log | ✅ | ✅ |
 | Einstellungen | ✅ | ✅ |

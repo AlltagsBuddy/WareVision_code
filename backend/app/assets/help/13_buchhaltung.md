@@ -1,7 +1,7 @@
 # Buchhaltung (nur Admin)
 
 ## Zeitraum und Übersicht
-Zeitraum über die Schnellauswahl (z. B. Laufender Monat, Vormonat, Quartal, Jahr) oder Von/Bis wählen und „Rechnungen anzeigen“. Die Reiter zeigen Privatkunden (B2C), Händler (B2B) und Eingangsrechnungen.
+Zeitraum über die Schnellauswahl (z. B. Laufender Monat, Vormonat, Quartal, Jahr) oder Von/Bis wählen und „Rechnungen anzeigen“. Die Reiter zeigen Privatkunden (B2C), Händler (B2B) und Eingangsrechnungen. Das Suchfeld darüber filtert die geladenen Belege nach Nummer, Kunde, Lieferant, Kategorie oder Notiz; Summen beziehen sich auf die angezeigten Belege.
 
 ## Eingangsrechnungen
 Eingangsrechnungen sind Rechnungen, die die Werkstatt erhält (z. B. für Teile, Miete, Strom). „+ Neue Eingangsrechnung“ erfasst eine Papier- oder PDF-Rechnung von Hand (Lieferant, Nummer, Datum, Netto, MwSt, Kategorie). Bei einer Gutschrift des Lieferanten „Gutschrift des Lieferanten“ anhaken. „↑ PDF“ hängt den Beleg an. „Bezahlt“ markiert die Zahlung.

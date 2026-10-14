@@ -7,6 +7,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
@@ -106,11 +107,26 @@ def list_appointments(
     to_date: datetime | None = Query(None, description="End of date range (ISO)"),
     customer_id: UUID | None = None,
     status_filter: str | None = None,
+    search: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ) -> list[Appointment]:
-    """List appointments, optionally filtered by date range."""
+    """List appointments, optionally filtered by date range.
+    search: Titel, Beschreibung, Kundenname/Firma oder Kennzeichen."""
     query = db.query(Appointment).options(joinedload(Appointment.customer))
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        customer_ids = select(Customer.id).where(
+            Customer.first_name.ilike(term) | Customer.last_name.ilike(term) | Customer.company_name.ilike(term)
+            | func.concat(Customer.first_name, " ", Customer.last_name).ilike(term)
+        )
+        vehicle_ids = select(Vehicle.id).where(Vehicle.license_plate.ilike(term) | Vehicle.vin.ilike(term))
+        query = query.filter(
+            Appointment.title.ilike(term)
+            | Appointment.description.ilike(term)
+            | Appointment.customer_id.in_(customer_ids)
+            | Appointment.vehicle_id.in_(vehicle_ids)
+        )
     if from_date:
         query = query.filter(Appointment.ends_at >= from_date)
     if to_date:

@@ -108,7 +108,9 @@ class InvoiceItem(BaseModel):
     )
     workshop_order_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("workshop_order_items.id"),
+        # Nach Storno darf der Auftrag korrigiert werden; die stornierte Rechnungsposition behält
+        # ihren Inhalt (Text, Menge, Preis), nur der interne Verweis auf die Auftragsposition entfällt.
+        ForeignKey("workshop_order_items.id", ondelete="SET NULL"),
         nullable=True,
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)

@@ -17,6 +17,7 @@ from app.models.document import Document
 from app.models.maintenance_plan import MaintenancePlan, MaintenanceTask
 from app.models.vehicle import Vehicle
 from app.models.user import User
+from app.services.maintenance_match import find_plan_for_vehicle
 from app.schemas.maintenance import (
     MaintenancePlanCreate,
     MaintenancePlanRead,
@@ -57,37 +58,12 @@ def get_plan_for_vehicle(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenancePlanRead | None:
-    """Passenden Wartungsplan für ein Fahrzeug suchen (nach Hersteller + Modell, Fallback nur Hersteller)."""
+    """Passenden Wartungsplan suchen: Modell vor Hersteller, passender Baujahr-Bereich vor „alle Baujahre“."""
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         return None
-
-    # 1. Exakter Treffer: Hersteller + Modell
-    if vehicle.vehicle_model_id:
-        plan = (
-            db.query(MaintenancePlan)
-            .filter(
-                MaintenancePlan.manufacturer_id == vehicle.manufacturer_id,
-                MaintenancePlan.vehicle_model_id == vehicle.vehicle_model_id,
-            )
-            .first()
-        )
-        if plan:
-            return MaintenancePlanRead.from_orm_with_document(plan)
-
-    # 2. Fallback: nur Hersteller (kein spezifisches Modell)
-    plan = (
-        db.query(MaintenancePlan)
-        .filter(
-            MaintenancePlan.manufacturer_id == vehicle.manufacturer_id,
-            MaintenancePlan.vehicle_model_id.is_(None),
-        )
-        .first()
-    )
-    if plan:
-        return MaintenancePlanRead.from_orm_with_document(plan)
-
-    return None
+    plan = find_plan_for_vehicle(db, vehicle)
+    return MaintenancePlanRead.from_orm_with_document(plan) if plan else None
 
 
 @router.post("", response_model=MaintenancePlanRead, status_code=status.HTTP_201_CREATED)
@@ -105,6 +81,8 @@ def create_maintenance_plan(
         interval_km=payload.interval_km,
         interval_hours=payload.interval_hours,
         interval_months=payload.interval_months,
+        build_year_from=payload.build_year_from,
+        build_year_to=payload.build_year_to,
     )
     db.add(plan)
     db.commit()
@@ -142,6 +120,12 @@ def update_maintenance_plan(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Wartungsplan nicht gefunden",
         )
+    fields = payload.model_fields_set
+    year_from = payload.build_year_from if "build_year_from" in fields else plan.build_year_from
+    year_to = payload.build_year_to if "build_year_to" in fields else plan.build_year_to
+    if year_from is not None and year_to is not None and year_from > year_to:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Baujahr von darf nicht größer als Baujahr bis sein")
     if payload.name is not None:
         plan.name = payload.name
     if payload.description is not None:
@@ -152,6 +136,11 @@ def update_maintenance_plan(
         plan.interval_hours = payload.interval_hours
     if payload.interval_months is not None:
         plan.interval_months = payload.interval_months
+    # Modell und Baujahr dürfen auch geleert werden (null = alle Modelle / alle Baujahre)
+    if "vehicle_model_id" in fields:
+        plan.vehicle_model_id = payload.vehicle_model_id
+    plan.build_year_from = year_from
+    plan.build_year_to = year_to
     db.commit()
     db.refresh(plan)
     return MaintenancePlanRead.from_orm_with_document(plan)
