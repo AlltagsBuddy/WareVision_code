@@ -31,7 +31,7 @@ describe('Seitenleiste', () => {
     }
     expect(within(nav).getByText('Werkstattaufträge')).toBeInTheDocument()
     expect(within(nav).getByText('Wartungspläne')).toBeInTheDocument()
-    expect(within(nav).getByText('? Hilfe')).toBeInTheDocument()
+    expect(within(nav).getByText('Hilfe')).toBeInTheDocument()
   })
 
   it('markiert die aktive Seite (auch Unterseiten)', () => {
@@ -53,7 +53,7 @@ describe('Seitenleiste', () => {
     expect(within(nav).queryByText('Buchhaltung')).not.toBeInTheDocument()
     expect(within(nav).queryByText('Rechnungen')).not.toBeInTheDocument()
     expect(within(nav).queryByText('Finanzen')).not.toBeInTheDocument()  // leere Gruppe ausgeblendet
-    expect(within(nav).getByText('Kunden', { selector: 'a' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Kunden' })).toBeInTheDocument()
   })
 })
 
