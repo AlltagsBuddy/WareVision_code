@@ -326,3 +326,9 @@ def company_settings(db):
             db.add(AppSetting(key=k, value=v))
     db.flush()
     return values
+
+
+@pytest.fixture(autouse=True)
+def _belegarchiv_tmp(tmp_path, monkeypatch):
+    """Belegarchiv der Tests in ein temporäres Verzeichnis legen (nie in echte Upload-Ordner)."""
+    monkeypatch.setattr("app.services.archive.archive_root", lambda: tmp_path / "belegarchiv")

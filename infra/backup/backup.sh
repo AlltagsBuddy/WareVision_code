@@ -16,3 +16,15 @@ FILE="$BACKUP_DIR/warevision_$(date +%Y%m%d_%H%M%S).dump"
 pg_dump -Fc "$PGDATABASE" > "$FILE"
 echo "Backup erstellt: $FILE"
 echo "Größe: $(du -h "$FILE" | cut -f1)"
+
+# Dateien sichern: Belegarchiv (GoBD-Originale), E-Rechnungs-Originale, Dokumente.
+# Ohne diese Dateien sind ausgegebene Belege nach einer Wiederherstellung nicht mehr vorhanden.
+UPLOADS_DIR="${UPLOADS_DIR:-/uploads}"
+if [ -d "$UPLOADS_DIR" ]; then
+  FILES="$BACKUP_DIR/warevision_dateien_$(date +%Y%m%d_%H%M%S).tar.gz"
+  tar -czf "$FILES" -C "$UPLOADS_DIR" .
+  echo "Dateien gesichert: $FILES"
+  echo "Größe: $(du -h "$FILES" | cut -f1)"
+else
+  echo "WARNUNG: Upload-Verzeichnis $UPLOADS_DIR nicht gefunden – Belegarchiv und Dokumente wurden NICHT gesichert."
+fi

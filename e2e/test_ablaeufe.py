@@ -143,3 +143,16 @@ def test_datev_export_vorschau(page, base_url):
         page.click("text=DATEV-Export herunterladen")
     assert dl.value.suggested_filename.startswith("DATEV_")
     assert not page.js_errors
+
+
+def test_belegarchiv(page, base_url):
+    page.goto(f"{base_url}/accounting")
+    page.wait_for_selector("text=Archivierte Originale")   # Status geladen
+    nachziehen = page.locator("button:has-text('Fehlende Originale erzeugen')")
+    if nachziehen.count():
+        nachziehen.click()
+        page.wait_for_selector("text=nachträglich archiviert", timeout=120000)
+    page.wait_for_selector("text=Alle ausgegebenen Belege sind archiviert")
+    page.click("button:has-text('Archiv prüfen')")
+    page.wait_for_selector("text=vollständig und unverändert")
+    assert not page.js_errors

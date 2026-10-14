@@ -25,6 +25,7 @@ from app.models.quote import Quote, QuoteItem
 from app.models.stock_count import StockCount, StockCountItem
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.datev import DatevAccount
+from app.models.archived_document import ArchivedDocument
 
 __all__ = [
     "BaseModel",
@@ -60,4 +61,5 @@ __all__ = [
     "PurchaseOrder",
     "PurchaseOrderItem",
     "DatevAccount",
+    "ArchivedDocument",
 ]

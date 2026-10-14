@@ -84,6 +84,8 @@ class TestSuche:
         ("Kunde hat ein Teil zurückgegeben, Teilgutschrift", "rechnungen"),
         ("Wo trage ich die Beraternummer für DATEV ein?", "buchhaltung"),
         ("DATEV Export für den Steuerberater", "buchhaltung"),
+        ("Belegarchiv prüfen Prüfsumme", "buchhaltung"),
+        ("Brauche ich eine Kasse mit TSE für Bargeld?", "recht_und_fristen"),
         ("Wie lange muss ich Rechnungen aufbewahren?", "recht_und_fristen"),
     ])
     def test_relevanter_treffer(self, frage, kapitel):

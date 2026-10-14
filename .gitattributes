@@ -1,0 +1,2 @@
+# Shell-Skripte laufen in Linux-Containern: immer LF-Zeilenenden (sonst bricht das Backup-Skript ab)
+*.sh text eol=lf

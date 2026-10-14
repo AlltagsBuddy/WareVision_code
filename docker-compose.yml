@@ -88,8 +88,10 @@ services:
       PGPASSWORD: warevision
       PGDATABASE: warevision
       BACKUP_DIR: /backups
+      UPLOADS_DIR: /uploads
     volumes:
       - backup_data:/backups
+      - uploads_data:/uploads:ro   # Belegarchiv, E-Rechnungs-Originale, Dokumente (nur lesend)
       - ./infra/backup/backup.sh:/usr/local/bin/backup.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
     depends_on:

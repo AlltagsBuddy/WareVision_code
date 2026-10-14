@@ -78,6 +78,7 @@ WareVision_code/
 | Rechnungen (PDF) | ✅ | ✅ |
 | Rechnungskorrektur / Gutschrift (RK-…, Teilmengen, Nachlass, Lagerrücknahme) | ✅ | ✅ |
 | DATEV-Export (Buchungsstapel EXTF 700/v13, Debitoren/Kreditoren, SKR03/04) | ✅ | ✅ |
+| Belegarchiv GoBD (Originale mit SHA-256, Nachziehen, Prüfung; Backup inkl. Dateien) | ✅ | ✅ |
 | Dokumentenmanagement | ✅ | ✅ |
 | Audit-Log | ✅ | ✅ |
 | Einstellungen | ✅ | ✅ |

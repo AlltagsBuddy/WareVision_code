@@ -20,3 +20,6 @@ Vor dem ersten Export unter „DATEV-Einstellungen“ eintragen: Beraternummer u
 
 ## DATEV: Vorschau und Hinweise
 „Vorschau“ zeigt Anzahl der Belege und Buchungen, Summen und neue Konten, ohne etwas zu speichern. Belege, die nicht sicher automatisch gebucht werden können, stehen als Hinweis in der Vorschau und in der LIESMICH-Datei – z. B. ein nicht unterstützter Steuersatz oder eine Eingangsrechnung mit mehreren Steuersätzen. Diese bitte vom Steuerberater manuell buchen lassen. Ein Export darf nur ein Wirtschaftsjahr umfassen. Beim ersten Mal empfiehlt sich ein Probe-Import beim Steuerberater.
+
+## Belegarchiv (GoBD)
+Der Bereich „Belegarchiv (GoBD)“ zeigt, ob alle ausgegebenen Belege als unveränderbares Original gesichert sind: Rechnungen, Storno- und Korrekturbelege, Mahnbriefe sowie versendete Angebote und Bestellungen. Jedes Original ist mit einer Prüfsumme (SHA-256) gesichert und wird nie überschrieben. Belege von vor diesem Update haben noch kein Original: Einmalig „Fehlende Originale erzeugen“ klicken – am besten bevor Firmen- oder Kundendaten geändert werden; diese Originale sind als „nachträglich“ gekennzeichnet. „Archiv prüfen“ kontrolliert alle Archivdateien auf Vorhandensein und Veränderung. Meldet die Prüfung ein Problem, wird das Original nicht neu erzeugt – dann die Datei aus der Datensicherung zurückholen.

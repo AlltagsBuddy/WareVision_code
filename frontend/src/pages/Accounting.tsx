@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { accountingApi, customersApi, incomingInvoicesApi, invoicesApi } from '../api/client'
 import DatevExport from '../components/DatevExport'
+import ArchivePanel from '../components/ArchivePanel'
 
 type Preset = 'current_month' | 'last_month' | 'current_quarter' | 'last_quarter' | 'current_year' | 'last_year' | 'custom'
 type AccountTab = 'b2c' | 'b2b' | 'incoming'
@@ -712,6 +713,9 @@ export default function Accounting() {
 
       {/* DATEV-Export */}
       <DatevExport getRange={getDates} />
+
+      {/* Belegarchiv */}
+      <ArchivePanel />
     </div>
   )
 }

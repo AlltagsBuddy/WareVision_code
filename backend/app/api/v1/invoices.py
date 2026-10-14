@@ -16,6 +16,7 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
 from app.models.user import User
 from app.schemas.invoice import InvoiceCorrectionIn, InvoiceCreate, InvoiceRead, InvoiceItemRead
+from app.services import archive
 from app.services.audit import log_audit
 from app.services.stock_booking import (
     apply_stock_change,
@@ -46,6 +47,15 @@ def _recalc_totals(db: Session, inv: Invoice) -> None:
     inv.gross_amount = net + vat
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+
+
+def _integrity_http(exc: Exception) -> HTTPException:
+    """Archivdatei fehlt oder wurde verändert: nichts Neues erzeugen, sondern deutlich melden."""
+    logger.error("Belegarchiv: %s", exc)
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"{exc}. Das Original wird aus Sicherheitsgründen nicht neu erzeugt – bitte die Datensicherung prüfen.",
+    )
 
 
 def _next_invoice_number(db: Session) -> str:
@@ -308,9 +318,15 @@ def mark_invoice_reminder(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Nur ausgestellte Rechnungen können gemahnt werden",
         )
+    if reminder_level <= inv.reminder_level:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Diese Mahnstufe wurde bereits erstellt. Mahnbriefe werden unverändert archiviert.",
+        )
     inv.reminder_level = reminder_level
     inv.reminder_date = date.today()
     log_audit(db, user_id=current_user.id, entity_type="invoice", entity_id=inv.id, action="reminder", new_values={"reminder_level": reminder_level})
+    archive.reminder_document(db, inv, current_user.id, backfilled=False)
     db.commit()
     db.refresh(inv)
     return inv
@@ -322,8 +338,7 @@ def get_reminder_pdf(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
-    """Mahnbrief als PDF herunterladen (basiert auf aktueller Mahnstufe)."""
-    from app.services.pdf import generate_reminder_pdf
+    """Mahnbrief der aktuellen Mahnstufe (beim Setzen der Stufe einmalig archiviert)."""
 
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
@@ -333,7 +348,11 @@ def get_reminder_pdf(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Für diese Rechnung wurde noch keine Mahnung erstellt",
         )
-    pdf_bytes = generate_reminder_pdf(db, inv)
+    try:
+        pdf_bytes = archive.reminder_document(db, inv, current_user.id, backfilled=True)
+        db.commit()
+    except archive.ArchiveIntegrityError as exc:
+        raise _integrity_http(exc) from exc
     subjects = {1: "Zahlungserinnerung", 2: "1_Mahnung", 3: "2_Mahnung"}
     label = subjects.get(inv.reminder_level, f"Mahnung_{inv.reminder_level}")
     filename = f"{label}_{inv.invoice_number}.pdf"
@@ -387,6 +406,8 @@ def issue_invoice(
             raise
     inv.status = "issued"
     log_audit(db, user_id=current_user.id, entity_type="invoice", entity_id=inv.id, action="issue")
+    # GoBD: Original so archivieren, wie es ausgegeben wird (PDF und E-Rechnung)
+    archive.archive_invoice(db, inv, current_user.id)
     db.commit()
     db.refresh(inv)
     return inv
@@ -490,6 +511,10 @@ def cancel_invoice(
             line_total_net=-item.line_total_net,
         ))
 
+    # Original der stornierten Rechnung sichern, falls es noch nicht im Belegarchiv liegt (ältere Rechnungen)
+    if inv.status != "draft":
+        archive.archive_invoice(db, inv, current_user.id, backfilled=True)
+
     # Originalrechnung stornieren und Querverweis setzen
     inv.status = "cancelled"
     inv.cancellation_invoice_id = storno.id
@@ -532,6 +557,8 @@ def cancel_invoice(
     except HTTPException:
         db.rollback()
         raise
+    db.flush()
+    archive.archive_invoice(db, storno, current_user.id)  # Stornorechnung als Original archivieren
     db.commit()
     db.refresh(inv)
     return inv
@@ -768,6 +795,7 @@ def create_correction(
         if stock_qty:
             stock_returns.append((item, stock_qty))
     _recalc_totals(db, correction)
+    archive.archive_invoice(db, correction, current_user.id)  # Rechnungskorrektur als Original archivieren
 
     # 3. Zurückgenommene Teile ins Lager buchen
     for item, qty in stock_returns:
@@ -806,14 +834,15 @@ def get_invoice_pdf(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
-    """Generate and return invoice as PDF."""
-    from app.services.pdf import generate_invoice_pdf
-
+    """Rechnung als PDF: Entwurf wird live erzeugt, ausgestellte Belege kommen unverändert aus dem Belegarchiv."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
     try:
-        pdf_bytes = generate_invoice_pdf(db, inv)
+        pdf_bytes = archive.invoice_document(db, inv, "pdf", current_user.id)
+        db.commit()  # ggf. nachträglich archiviertes Original speichern
+    except archive.ArchiveIntegrityError as exc:
+        raise _integrity_http(exc) from exc
     except Exception as exc:
         logger.exception("PDF-Generierung fehlgeschlagen für Rechnung %s", invoice_id)
         raise HTTPException(
@@ -831,7 +860,6 @@ def send_invoice_email(
     current_user: Annotated[User, Depends(get_current_user)] = None,
 ):
     """Rechnung per E-Mail versenden. recipient_email optional (sonst Kunden-E-Mail)."""
-    from app.services.pdf import generate_invoice_pdf
     from app.services.email import send_email_with_attachment
     from app.models.app_setting import AppSetting
 
@@ -853,7 +881,9 @@ def send_invoice_email(
     company_name = (settings_rows[0].value or "WareVision").strip() if settings_rows else "WareVision"
 
     try:
-        pdf_bytes = generate_invoice_pdf(db, inv)
+        pdf_bytes = archive.invoice_document(db, inv, "pdf", current_user.id)
+    except archive.ArchiveIntegrityError as exc:
+        raise _integrity_http(exc) from exc
     except Exception as exc:
         logger.exception("PDF-Generierung fehlgeschlagen für Rechnung %s", invoice_id)
         raise HTTPException(
@@ -916,14 +946,15 @@ def get_invoice_zugferd(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
-    """Generate and return invoice as ZUGFeRD/Factur-X PDF (e-invoice with embedded XML)."""
-    from app.services.zugferd import generate_zugferd_pdf
-
+    """E-Rechnung (ZUGFeRD/Factur-X): Entwurf live, ausgestellte Belege aus dem Belegarchiv."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
     try:
-        pdf_bytes = generate_zugferd_pdf(db, inv)
+        pdf_bytes = archive.invoice_document(db, inv, "zugferd", current_user.id)
+        db.commit()
+    except archive.ArchiveIntegrityError as exc:
+        raise _integrity_http(exc) from exc
     except Exception as exc:
         logger.exception("ZUGFeRD-Generierung fehlgeschlagen für Rechnung %s", invoice_id)
         raise HTTPException(

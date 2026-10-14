@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
 from app.schemas.quote import QuoteConvertIn, QuoteIn, QuoteRead, QuoteSendEmailIn, QuoteStatusIn
+from app.services import archive
 from app.services.audit import log_audit
 from app.services.stock_booking import book_workshop_material_out
 
@@ -245,6 +246,7 @@ def change_quote_status(
         db, user_id=current_user.id, entity_type="quote", entity_id=quote.id, action="status",
         old_values={"status": old_status}, new_values={"status": payload.status},
     )
+    archive.quote_document(db, quote, current_user.id, backfilled=False)  # ausgegebenes Angebot sichern
     db.commit()
     db.refresh(quote)
     return quote
@@ -357,6 +359,7 @@ def convert_to_workshop_order(
         raise
 
     quote.status = "converted"
+    archive.quote_document(db, quote, current_user.id, backfilled=False)  # ausgegebenes Angebot sichern (falls noch nicht)
     quote.workshop_order_id = order.id
     if not quote.vehicle_id:
         quote.vehicle_id = vehicle_id
@@ -375,11 +378,13 @@ def get_quote_pdf(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
-    """Angebot / Kostenvoranschlag als PDF."""
-    from app.services.quote_pdf import generate_quote_pdf
-
+    """Angebot / Kostenvoranschlag als PDF (Entwurf live, sonst das archivierte Original)."""
     quote = _get_quote(db, quote_id)
-    pdf_bytes = generate_quote_pdf(db, quote)
+    try:
+        pdf_bytes = archive.quote_document(db, quote, current_user.id)
+        db.commit()
+    except archive.ArchiveIntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     label = _TYPE_LABEL.get(quote.quote_type, "Angebot")
     return Response(
         content=pdf_bytes,
@@ -413,7 +418,11 @@ def send_quote_email(
     row = db.query(AppSetting).filter(AppSetting.key == "company_name").first()
     company_name = ((row.value if row else "") or "WareVision").strip()
     label = _TYPE_LABEL.get(quote.quote_type, "Angebot")
-    pdf_bytes = generate_quote_pdf(db, quote)
+    was_draft = quote.status == "draft"
+    try:
+        pdf_bytes = generate_quote_pdf(db, quote) if was_draft else archive.quote_document(db, quote, current_user.id)
+    except archive.ArchiveIntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     body = (
         "Sehr geehrte Damen und Herren,\n\n"
         f"anbei erhalten Sie unser {label} {quote.quote_number}"
@@ -440,6 +449,9 @@ def send_quote_email(
 
     if quote.status == "draft":
         quote.status = "sent"
+    if was_draft:  # genau die versendete Datei archivieren
+        archive.store(db, entity_type="quote", entity_id=quote.id, kind="pdf", document_number=quote.quote_number,
+                      data=pdf_bytes, user_id=current_user.id)
     log_audit(
         db, user_id=current_user.id, entity_type="quote", entity_id=quote.id, action="email_sent",
         new_values={"recipient": recipient},

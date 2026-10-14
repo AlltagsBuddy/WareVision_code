@@ -563,6 +563,12 @@ export const accountingApi = {
   },
 }
 
+export const archiveApi = {
+  status: () => api<any>('/archive/status'),
+  backfill: () => api<any>('/archive/backfill', { method: 'POST' }),
+  verify: () => api<any>('/archive/verify'),
+}
+
 export const incomingInvoicesApi = {
   list: (params?: { date_from?: string; date_to?: string; status_filter?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()

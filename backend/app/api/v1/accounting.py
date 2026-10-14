@@ -145,16 +145,15 @@ def export_accounting(
     pdf_errors: list[str] = []
 
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        from app.services.zugferd import generate_zugferd_pdf  # noqa: PLC0415
-        from app.services.pdf import generate_invoice_pdf  # noqa: PLC0415
+        from app.services import archive  # noqa: PLC0415
 
         # --- PDFs Ausgangsrechnungen B2C ---
         for inv in b2c_invoices:
             try:
-                pdf_bytes = generate_zugferd_pdf(db, inv)
+                pdf_bytes = archive.invoice_document(db, inv, "zugferd", None)
             except Exception as exc:  # noqa: BLE001
                 try:
-                    pdf_bytes = generate_invoice_pdf(db, inv)
+                    pdf_bytes = archive.invoice_document(db, inv, "pdf", None)
                     pdf_errors.append(f"{inv.invoice_number}: ZUGFeRD fehlgeschlagen, normales PDF verwendet ({exc})")
                 except Exception as exc2:  # noqa: BLE001
                     pdf_errors.append(f"{inv.invoice_number}: {exc2}")
@@ -164,10 +163,10 @@ def export_accounting(
         # --- PDFs Ausgangsrechnungen B2B ---
         for inv in b2b_invoices:
             try:
-                pdf_bytes = generate_zugferd_pdf(db, inv)
+                pdf_bytes = archive.invoice_document(db, inv, "zugferd", None)
             except Exception as exc:  # noqa: BLE001
                 try:
-                    pdf_bytes = generate_invoice_pdf(db, inv)
+                    pdf_bytes = archive.invoice_document(db, inv, "pdf", None)
                     pdf_errors.append(f"{inv.invoice_number}: ZUGFeRD fehlgeschlagen, normales PDF verwendet ({exc})")
                 except Exception as exc2:  # noqa: BLE001
                     pdf_errors.append(f"{inv.invoice_number}: {exc2}")
@@ -273,6 +272,7 @@ def export_accounting(
         )
         zf.writestr("LIESMICH.txt", readme.encode("utf-8"))
 
+    db.commit()  # nachträglich archivierte Originale speichern
     zip_buffer.seek(0)
     filename = f"Buchhaltung_{date_from.strftime('%Y%m%d')}_{date_to.strftime('%Y%m%d')}.zip"
     return Response(

@@ -29,3 +29,6 @@ Die MwSt wird je Steuersatz ausgewiesen und gerundet (z. B. 19 % und 7 % getrenn
 
 ## ZUGFeRD importieren (Anzeige)
 „ZUGFeRD importieren“ zeigt die Daten einer ZUGFeRD-PDF nur an. Zum Speichern von Lieferantenrechnungen Buchhaltung → Eingangsrechnungen → „E-Rechnung importieren“ verwenden.
+
+## Original im Belegarchiv
+Beim Ausstellen wird die Rechnung einmalig als Original gespeichert (PDF und E-Rechnung), ebenso Stornorechnungen, Rechnungskorrekturen und jeder Mahnbrief. „PDF“, „Vorschau“, „ZUGFeRD“ und „E-Mail“ liefern danach immer genau dieses Original – auch wenn du später Firmendaten, Logo oder Kundenadresse änderst oder einen Kunden anonymisierst. Nur Entwürfe werden mit den aktuellen Daten erzeugt. Jede Mahnstufe kann deshalb nur einmal erstellt werden.

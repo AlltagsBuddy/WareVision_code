@@ -26,6 +26,7 @@ from app.schemas.purchase_order import (
     SuggestionGroup,
     SuggestionItem,
 )
+from app.services import archive
 from app.services.audit import log_audit
 from app.services.stock_booking import apply_stock_change
 
@@ -317,6 +318,7 @@ def mark_purchase_order_sent(
         db, user_id=current_user.id, entity_type="purchase_order", entity_id=order.id, action="status",
         old_values={"status": "draft"}, new_values={"status": "sent"},
     )
+    archive.purchase_order_document(db, order, current_user.id, backfilled=False)
     db.commit()
     db.refresh(order)
     return order
@@ -328,12 +330,15 @@ def get_purchase_order_pdf(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
-    """Bestellung als PDF."""
-    from app.services.purchase_order_pdf import generate_purchase_order_pdf
-
+    """Bestellung als PDF (Entwurf live, sonst das archivierte Original)."""
     order = _get_order(db, order_id)
+    try:
+        content = archive.purchase_order_document(db, order, current_user.id)
+        db.commit()
+    except archive.ArchiveIntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     return Response(
-        content=generate_purchase_order_pdf(db, order),
+        content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="Bestellung_{order.order_number}.pdf"'},
     )
@@ -373,6 +378,11 @@ def send_purchase_order_email(
         + "\nBitte bestätigen Sie die Bestellung kurz. Vielen Dank.\n\n"
         f"Mit freundlichen Grüßen\n{company_name}\n"
     )
+    was_draft = order.status == "draft"
+    try:
+        pdf_bytes = generate_purchase_order_pdf(db, order) if was_draft else archive.purchase_order_document(db, order, current_user.id)
+    except archive.ArchiveIntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     try:
         send_email_with_attachment(
             db,
@@ -380,7 +390,7 @@ def send_purchase_order_email(
             subject=f"Bestellung {order.order_number} – {company_name}",
             body=body,
             attachment_filename=f"Bestellung_{order.order_number}.pdf",
-            attachment_data=generate_purchase_order_pdf(db, order),
+            attachment_data=pdf_bytes,
             attachment_content_type="application/pdf",
         )
     except Exception as exc:
@@ -395,6 +405,9 @@ def send_purchase_order_email(
         order.status = "sent"
     order.sent_at = datetime.now(timezone.utc)
     order.sent_to_email = recipient
+    if was_draft:  # genau die versendete Datei archivieren
+        archive.store(db, entity_type="purchase_order", entity_id=order.id, kind="pdf",
+                      document_number=order.order_number, data=pdf_bytes, user_id=current_user.id)
     log_audit(
         db, user_id=current_user.id, entity_type="purchase_order", entity_id=order.id, action="email_sent",
         old_values={"status": old_status}, new_values={"status": order.status, "recipient": recipient},

@@ -1,6 +1,8 @@
 # WareVision – Datenbank-Backup (Epic 19)
 
-**Ziel:** Tägliche Backups der PostgreSQL-Datenbank für GoBD-Konformität und Disaster Recovery.
+**Ziel:** Tägliche Backups der PostgreSQL-Datenbank **und der Dateien** (Belegarchiv, E-Rechnungs-Originale, Dokumente) für GoBD-Konformität und Disaster Recovery.
+
+> **Wichtig:** Seit dem Belegarchiv liegen die Originale aller ausgegebenen Rechnungen, Mahnungen, Angebote und Bestellungen als Dateien im Volume `uploads_data`. Das Backup erzeugt deshalb zwei Dateien: `warevision_*.dump` (Datenbank) und `warevision_dateien_*.tar.gz` (Dateien). **Beide** gehören zusammen und müssen aufbewahrt werden (Rechnungen 8 Jahre). Bitte zusätzlich regelmäßig eine Kopie außerhalb des Rechners ablegen (z. B. externe Festplatte oder verschlüsselter Cloud-Speicher).
 
 ---
 
@@ -69,6 +71,16 @@ docker compose run --rm -v backup_data:/backups \
 ```
 
 **Hinweis:** `--clean` löscht bestehende Objekte. Bei Produktion vorher testen!
+
+### Dateien wiederherstellen (Belegarchiv, Dokumente)
+
+```bash
+# Sicherung in das Backup-Volume legen (falls nötig) und in das Upload-Volume entpacken
+docker compose run --rm -v backup_data:/backups -v warevision_code_uploads_data:/uploads alpine \
+  sh -c "tar -xzf /backups/warevision_dateien_20260310_120000.tar.gz -C /uploads"
+```
+
+Den Volume-Namen zeigt `docker volume ls` (meist `<ordnername>_uploads_data`). Danach unter Buchhaltung → Belegarchiv auf „Archiv prüfen“ klicken.
 
 ### Restore testen
 
