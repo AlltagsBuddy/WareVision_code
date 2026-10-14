@@ -6,6 +6,7 @@
 ## Automatische Lagerbuchungen
 - Werkstattauftrag: Teile-Positionen mit Artikel werden beim Hinzufügen gebucht und beim Entfernen zurückgebucht.
 - Rechnung ohne Werkstattauftrag: Artikel werden beim „Ausstellen“ gebucht, bei Storno zurückgebucht.
+- Rechnungskorrektur mit „zurück“: Die gutgeschriebene Menge wird wieder ins Lager gebucht.
 - Inventur: Differenzen werden beim Abschluss gebucht.
 
 ## Reservierungen

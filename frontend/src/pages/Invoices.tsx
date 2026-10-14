@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { invoicesApi, customersApi, workshopOrdersApi } from '../api/client'
 import PreviewModal from '../components/PreviewModal'
+import InvoiceCorrectionModal from '../components/InvoiceCorrectionModal'
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Entwurf',
@@ -9,6 +10,17 @@ const STATUS_LABELS: Record<string, string> = {
   partially_paid: 'Teilweise bezahlt',
   paid: 'Bezahlt',
   cancelled: 'Storniert',
+}
+
+const DOC_LABELS: Record<string, string> = { cancellation: 'Stornorechnung', correction: 'Rechnungskorrektur' }
+
+/** Status-Text: Bei Rechnungskorrekturen geht es um eine Erstattung, nicht um eine Zahlung des Kunden */
+const statusLabel = (inv: any) => {
+  if (inv.document_type === 'correction') {
+    if (inv.status === 'issued') return 'Erstattung offen'
+    if (inv.status === 'paid') return 'Erstattet/verrechnet'
+  }
+  return STATUS_LABELS[inv.status] || inv.status
 }
 
 export default function Invoices() {
@@ -48,6 +60,8 @@ export default function Invoices() {
   const [zugferdImporting, setZugferdImporting] = useState(false)
   const [zugferdImportError, setZugferdImportError] = useState('')
   const [reminderError, setReminderError] = useState('')
+  const [correctionFor, setCorrectionFor] = useState<any | null>(null)
+  const [correctionDone, setCorrectionDone] = useState<any | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -208,9 +222,12 @@ export default function Invoices() {
 
   const handleMarkPaid = (inv: any) => {
     setConfirmError('')
+    const isCorrection = inv.document_type === 'correction'
     setConfirmModal({
-      title: 'Als bezahlt markieren',
-      message: `Rechnung ${inv.invoice_number} als bezahlt markieren?`,
+      title: isCorrection ? 'Als erstattet markieren' : 'Als bezahlt markieren',
+      message: isCorrection
+        ? `Rechnungskorrektur ${inv.invoice_number} als erstattet bzw. verrechnet markieren?`
+        : `Rechnung ${inv.invoice_number} als bezahlt markieren?`,
       onConfirm: async () => {
         await invoicesApi.markPaid(inv.id)
         setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'paid' } : i)))
@@ -347,7 +364,23 @@ export default function Invoices() {
   const isOverdue = (inv: any) => {
     // Entwürfe können nicht überfällig sein – sie wurden noch nicht ausgestellt
     if (!inv.due_date || inv.status === 'draft' || inv.status === 'paid' || inv.status === 'cancelled') return false
+    // Storno- und Korrekturbelege sind keine Forderungen
+    if (inv.document_type && inv.document_type !== 'invoice') return false
     return new Date(inv.due_date) < new Date(new Date().toISOString().slice(0, 10))
+  }
+
+  // Rechnungskorrekturen je Originalrechnung (nicht stornierte) und Bezugsnummer eines Beleges
+  const correctionsOf = (id: string) =>
+    invoices.filter((i) => i.document_type === 'correction' && i.corrects_invoice_id === id && i.status !== 'cancelled')
+  const refNumber = (inv: any) => {
+    const refId = inv.corrects_invoice_id || inv.cancellation_of_id
+    return refId ? invoices.find((i) => i.id === refId)?.invoice_number : undefined
+  }
+
+  const handleCorrectionCreated = async (created: any) => {
+    setCorrectionFor(null)
+    setCorrectionDone(created)
+    setInvoices(await invoicesApi.list({ status_filter: statusFilter || undefined, overdue: overdueFilter }))
   }
 
   const handleSort = (field: string) => {
@@ -609,9 +642,22 @@ export default function Invoices() {
             ) : (
               displayed.map((inv) => (
                 <tr key={inv.id} className={isOverdue(inv) ? 'warning-row' : ''}>
-                  <td><strong>{inv.invoice_number}</strong></td>
                   <td>
-                    {STATUS_LABELS[inv.status] || inv.status}
+                    <strong>{inv.invoice_number}</strong>
+                    {DOC_LABELS[inv.document_type] && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                        {DOC_LABELS[inv.document_type]}
+                        {refNumber(inv) ? ` zu ${refNumber(inv)}` : ''}
+                      </div>
+                    )}
+                    {correctionsOf(inv.id).length > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                        korrigiert durch {correctionsOf(inv.id).map((c) => c.invoice_number).join(', ')}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {statusLabel(inv)}
                     {isOverdue(inv) && <span className="warning" style={{ marginLeft: 4 }}>überfällig</span>}
                   </td>
                   <td>
@@ -640,7 +686,7 @@ export default function Invoices() {
                   </td>
                   <td>{getCustomerName(inv.customer_id)}</td>
                   <td>{formatDate(inv.invoice_date)}</td>
-                  <td>{inv.due_date ? formatDate(inv.due_date) : '–'}</td>
+                  <td>{inv.due_date && (!inv.document_type || inv.document_type === 'invoice') ? formatDate(inv.due_date) : '–'}</td>
                   <td>{Number(inv.gross_amount).toFixed(2)} €</td>
                   <td>
                     {inv.status === 'draft' && (
@@ -678,13 +724,15 @@ export default function Invoices() {
                     )}
                     {(inv.status === 'issued' || inv.status === 'partially_paid') && (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => handleMarkPaid(inv)}
-                          className="btn-secondary btn-sm"
-                        >
-                          Als bezahlt
-                        </button>
+                        {inv.document_type !== 'cancellation' && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkPaid(inv)}
+                            className="btn-secondary btn-sm"
+                          >
+                            {inv.document_type === 'correction' ? 'Als erstattet' : 'Als bezahlt'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleSendEmail(inv)}
@@ -713,13 +761,42 @@ export default function Invoices() {
                         >
                           ZUGFeRD
                         </button>
+                        {inv.document_type === 'invoice' && (
+                          <button
+                            type="button"
+                            onClick={() => setCorrectionFor(inv)}
+                            className="btn-secondary btn-sm"
+                          >
+                            Gutschrift / Korrektur
+                          </button>
+                        )}
+                        {inv.document_type !== 'cancellation' && correctionsOf(inv.id).length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
+                            className="btn-secondary btn-sm"
+                            style={{ color: 'var(--color-error)' }}
+                          >
+                            Stornieren
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {inv.status === 'cancelled' && (
+                      <>
                         <button
                           type="button"
-                          onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
+                          onClick={() => handlePreviewPdf(inv.id, inv.invoice_number)}
                           className="btn-secondary btn-sm"
-                          style={{ color: 'var(--color-error)' }}
                         >
-                          Stornieren
+                          Vorschau
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadPdf(inv.id, inv.invoice_number)}
+                          className="btn-secondary btn-sm"
+                        >
+                          PDF
                         </button>
                       </>
                     )}
@@ -753,14 +830,25 @@ export default function Invoices() {
                         >
                           ZUGFeRD
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
-                          className="btn-secondary btn-sm"
-                          style={{ color: 'var(--color-error)' }}
-                        >
-                          Stornieren
-                        </button>
+                        {inv.document_type === 'invoice' && (
+                          <button
+                            type="button"
+                            onClick={() => setCorrectionFor(inv)}
+                            className="btn-secondary btn-sm"
+                          >
+                            Gutschrift / Korrektur
+                          </button>
+                        )}
+                        {inv.document_type !== 'cancellation' && correctionsOf(inv.id).length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setCancelModal({ inv, reason: '' }); setCancelError('') }}
+                            className="btn-secondary btn-sm"
+                            style={{ color: 'var(--color-error)' }}
+                          >
+                            Stornieren
+                          </button>
+                        )}
                       </>
                     )}
                   </td>
@@ -848,6 +936,27 @@ export default function Invoices() {
             </div>
             <div className="form-actions" style={{ marginTop: '1rem' }}>
               <button type="button" onClick={() => setZugferdImportResult(null)} className="btn-primary">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {correctionFor && (
+        <InvoiceCorrectionModal invoice={correctionFor} onClose={() => setCorrectionFor(null)} onCreated={handleCorrectionCreated} />
+      )}
+
+      {correctionDone && (
+        <div className="modal-overlay" onClick={() => setCorrectionDone(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Rechnungskorrektur erstellt</h2>
+            <p>
+              Beleg <strong>{correctionDone.invoice_number}</strong> über{' '}
+              {Number(correctionDone.gross_amount).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} wurde erstellt.
+            </p>
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={() => setCorrectionDone(null)}>Schließen</button>
+              <button type="button" className="btn-secondary" onClick={() => { handleSendEmail(correctionDone); setCorrectionDone(null) }}>Per E-Mail senden</button>
+              <button type="button" className="btn-primary" onClick={() => { handlePreviewPdf(correctionDone.id, correctionDone.invoice_number); setCorrectionDone(null) }}>PDF ansehen</button>
             </div>
           </div>
         </div>

@@ -91,3 +91,40 @@ def test_bestellung_anlegen_bestellen_wareneingang(page, base_url):
     page.click("text=Bestellvorschlag")
     page.wait_for_timeout(500)
     assert not page.js_errors
+
+
+def _api(page, base_url, method, path, data=None):
+    """API-Aufruf mit dem Login der Browser-Sitzung (Token aus dem localStorage)."""
+    token = page.evaluate("() => localStorage.getItem('token')")
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"{base_url}/api/v1{path}"
+    res = page.request.fetch(url, method=method, headers=headers, data=data)
+    assert res.ok, res.text()
+    return res.json()
+
+
+def test_rechnungskorrektur_kulanz(page, base_url):
+    page.goto(f"{base_url}/invoices")
+    customers = _api(page, base_url, "GET", "/customers?limit=1")
+    if not customers:
+        return  # kein Kunde in der Testinstanz
+    inv = _api(page, base_url, "POST", "/invoices", {
+        "customer_id": customers[0]["id"], "invoice_date": date.today().isoformat(),
+        "items": [{"description": "E2E Leistung", "quantity": 1, "unit_price": 50, "vat_rate": 19}],
+    })
+    _api(page, base_url, "POST", f"/invoices/{inv['id']}/issue")
+    page.reload()
+    row = page.locator("tr").filter(has=page.get_by_text(inv["invoice_number"], exact=True))
+    row.locator("button:has-text('Gutschrift / Korrektur')").click()
+    page.wait_for_selector("text=Gutschrift brutto")
+    page.fill("#rk-discount-net", "10")
+    page.fill("#rk-reason", "E2E Kulanz")
+    page.click("text=Rechnungskorrektur erstellen")
+    page.wait_for_selector("text=Rechnungskorrektur erstellt")
+    assert "RK-" in page.locator(".modal").first.inner_text()
+    page.click(".modal >> text=Schließen")
+    page.wait_for_selector("text=Erstattung offen")
+    row = page.locator("tr").filter(has=page.get_by_text(inv["invoice_number"], exact=True))
+    assert "korrigiert durch RK-" in row.inner_text()
+    assert row.locator("text=Stornieren").count() == 0  # nach Korrektur nur noch weitere Korrekturen möglich
+    assert not page.js_errors

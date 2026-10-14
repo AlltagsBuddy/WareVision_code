@@ -80,6 +80,8 @@ class TestSuche:
         ("Barcode scannen im Lager", "lager"),
         ("Wie buche ich den Wareneingang einer Bestellung?", "bestellungen"),
         ("Was muss ich nachbestellen?", "bestellungen"),
+        ("Wie erstelle ich eine Gutschrift für eine bezahlte Rechnung?", "rechnungen"),
+        ("Kunde hat ein Teil zurückgegeben, Teilgutschrift", "rechnungen"),
         ("Wie lange muss ich Rechnungen aufbewahren?", "recht_und_fristen"),
     ])
     def test_relevanter_treffer(self, frage, kapitel):

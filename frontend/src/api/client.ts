@@ -476,6 +476,12 @@ export const invoicesApi = {
     api<any>(`/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }),
   markReminder: (id: string, level: 1 | 2 | 3) =>
     api<any>(`/invoices/${id}/reminder?reminder_level=${level}`, { method: 'POST' }),
+  correctionInfo: (id: string) => api<any>(`/invoices/${id}/correction-info`),
+  createCorrection: (id: string, data: {
+    reason: string
+    lines: { item_id: string; quantity: number; return_to_stock: boolean }[]
+    free_lines: { description: string; net_amount: number; vat_rate: number }[]
+  }) => api<any>(`/invoices/${id}/correction`, { method: 'POST', body: JSON.stringify(data) }),
   downloadReminderPdf: async (id: string): Promise<Blob> => {
     const token = getToken()
     const res = await fetch(`${API_BASE}/invoices/${id}/reminder-pdf`, {

@@ -52,7 +52,10 @@ def _write_outgoing_csv(
         "Kundenname", "Netto (EUR)", "MwSt (EUR)", "Brutto (EUR)", "Status",
     ])
     for inv in invoices:
-        typ = "Stornorechnung" if inv.invoice_number.startswith("STO-") else "Rechnung"
+        typ = {"cancellation": "Stornorechnung", "correction": "Rechnungskorrektur"}.get(
+            getattr(inv, "document_type", "invoice"),
+            "Stornorechnung" if inv.invoice_number.startswith("STO-") else "Rechnung",
+        )
         writer.writerow([
             inv.invoice_number,
             typ,

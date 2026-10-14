@@ -15,10 +15,12 @@ from app.core.database import get_db
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
 from app.models.user import User
-from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceItemRead
+from app.schemas.invoice import InvoiceCorrectionIn, InvoiceCreate, InvoiceRead, InvoiceItemRead
 from app.services.audit import log_audit
 from app.services.stock_booking import (
+    apply_stock_change,
     book_standalone_invoice_on_issue,
+    decimal_quantity_to_int_units,
     return_stock_for_cancelled_issued_invoice,
 )
 
@@ -115,6 +117,7 @@ def list_invoices(
         today = date.today()
         query = query.filter(
             Invoice.status.in_(["issued", "partially_paid"]),
+            Invoice.document_type == "invoice",
             Invoice.due_date.isnot(None),
             Invoice.due_date < today,
         )
@@ -300,7 +303,7 @@ def mark_invoice_reminder(
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
-    if inv.status not in ("issued", "partially_paid"):
+    if inv.status not in ("issued", "partially_paid") or inv.document_type != "invoice":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Nur ausgestellte Rechnungen können gemahnt werden",
@@ -412,9 +415,24 @@ def cancel_invoice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Für diese Rechnung existiert bereits eine Stornorechnung",
         )
+    if inv.document_type == "cancellation":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Eine Stornorechnung kann nicht storniert werden",
+        )
+    if inv.document_type == "invoice" and _active_corrections(db, inv):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Zu dieser Rechnung gibt es bereits Rechnungskorrekturen. "
+                "Bitte die restlichen Positionen ebenfalls per Rechnungskorrektur gutschreiben."
+            ),
+        )
 
     stock_return_for_standalone = (
-        inv.workshop_order_id is None and inv.status in ("issued", "partially_paid")
+        inv.document_type == "invoice"
+        and inv.workshop_order_id is None
+        and inv.status in ("issued", "partially_paid", "paid")
     )
 
     # Stornonummer generieren: STO-2026-0001
@@ -433,7 +451,8 @@ def cancel_invoice(
             pass
     sto_number = f"STO-{year}-{sto_num:04d}"
 
-    sto_notes = f"Stornorechnung zu {inv.invoice_number}"
+    label = "Rechnungskorrektur" if inv.document_type == "correction" else "Rechnung"
+    sto_notes = f"Stornorechnung zu {label} {inv.invoice_number}"
     if reason:
         sto_notes += f". Grund: {reason}"
 
@@ -441,6 +460,7 @@ def cancel_invoice(
         customer_id=inv.customer_id,
         workshop_order_id=None,
         cancellation_of_id=inv.id,
+        document_type="cancellation",
         invoice_number=sto_number,
         invoice_date=date.today(),
         service_date=inv.service_date,
@@ -492,15 +512,292 @@ def cancel_invoice(
             "reason": reason or None,
         },
     )
-    if stock_return_for_standalone:
-        try:
+    try:
+        if stock_return_for_standalone:
             return_stock_for_cancelled_issued_invoice(db, list(inv.items), current_user.id)
-        except HTTPException:
-            db.rollback()
-            raise
+        if inv.document_type == "correction":
+            # Storno einer Rechnungskorrektur: zurückgenommene Teile wieder aus dem Lager buchen
+            for it in inv.items:
+                if it.returned_to_stock and it.article_id:
+                    apply_stock_change(
+                        db,
+                        article_id=it.article_id,
+                        quantity=decimal_quantity_to_int_units(-it.quantity),
+                        movement_type="invoice_consumption",
+                        reference_type="invoice_item",
+                        reference_id=it.id,
+                        notes=f"Storno Rechnungskorrektur {inv.invoice_number}",
+                        user_id=current_user.id,
+                    )
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(inv)
     return inv
+
+
+# ---------------------------------------------------------------------------
+# Rechnungskorrektur (Gutschrift des Verkäufers)
+# ---------------------------------------------------------------------------
+
+def _active_corrections(db: Session, original: Invoice) -> list[Invoice]:
+    """Nicht stornierte Rechnungskorrekturen zu einer Rechnung."""
+    return (
+        db.query(Invoice)
+        .filter(
+            Invoice.corrects_invoice_id == original.id,
+            Invoice.document_type == "correction",
+            Invoice.status != "cancelled",
+        )
+        .order_by(Invoice.invoice_date, Invoice.invoice_number)
+        .all()
+    )
+
+
+def _correction_state(db: Session, original: Invoice) -> dict:
+    """Bereits gutgeschriebene Mengen je Position und Summen."""
+    corrections = _active_corrections(db, original)
+    credited_qty: dict[UUID, Decimal] = {}
+    credited_gross = Decimal("0")
+    for c in corrections:
+        credited_gross += -Decimal(c.gross_amount)
+        for it in c.items:
+            if it.corrects_item_id:
+                credited_qty[it.corrects_item_id] = credited_qty.get(it.corrects_item_id, Decimal("0")) + (-Decimal(it.quantity))
+    return {"corrections": corrections, "credited_qty": credited_qty, "credited_gross": credited_gross}
+
+
+def _next_correction_number(db: Session) -> str:
+    """Nächste Nummer für Rechnungskorrekturen (eigener fortlaufender Nummernkreis, z. B. RK-2026-0001)."""
+    year = date.today().year
+    last = (
+        db.query(Invoice)
+        .filter(Invoice.invoice_number.like(f"RK-{year}-%"))
+        .order_by(Invoice.invoice_number.desc())
+        .first()
+    )
+    num = 1
+    if last:
+        try:
+            num = int(last.invoice_number.split("-")[-1]) + 1
+        except (IndexError, ValueError):
+            pass
+    return f"RK-{year}-{num:04d}"
+
+
+def _get_correctable(db: Session, invoice_id: UUID) -> Invoice:
+    """Rechnung laden und prüfen, ob sie korrigiert werden darf."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    if inv.document_type != "invoice":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur normale Rechnungen können korrigiert werden (keine Storno- oder Korrekturbelege)",
+        )
+    if inv.status not in ("issued", "partially_paid", "paid"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur ausgestellte oder bezahlte Rechnungen können korrigiert werden. Entwürfe bitte direkt ändern.",
+        )
+    return inv
+
+
+@router.get("/{invoice_id}/correction-info")
+def get_correction_info(
+    invoice_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    """Übersicht für eine Rechnungskorrektur: noch gutschreibbare Mengen und bisherige Korrekturen."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rechnung nicht gefunden")
+    state = _correction_state(db, inv)
+    items = []
+    for it in inv.items:
+        credited = state["credited_qty"].get(it.id, Decimal("0"))
+        items.append({
+            "item_id": str(it.id),
+            "article_id": str(it.article_id) if it.article_id else None,
+            "description": it.description,
+            "quantity": str(it.quantity),
+            "credited_quantity": str(credited),
+            "remaining_quantity": str(Decimal(it.quantity) - credited),
+            "unit": it.unit,
+            "unit_price": str(it.unit_price),
+            "vat_rate": str(it.vat_rate),
+        })
+    gross = Decimal(inv.gross_amount)
+    return {
+        "invoice_id": str(inv.id),
+        "invoice_number": inv.invoice_number,
+        "gross_amount": str(gross),
+        "credited_gross": str(state["credited_gross"]),
+        "remaining_gross": str(gross - state["credited_gross"]),
+        "vat_rates": [str(r) for r in sorted({Decimal(it.vat_rate).quantize(_CENT) for it in inv.items}, reverse=True)],
+        "items": items,
+        "corrections": [
+            {"id": str(c.id), "invoice_number": c.invoice_number, "invoice_date": c.invoice_date.isoformat(),
+             "gross_amount": str(c.gross_amount), "status": c.status}
+            for c in state["corrections"]
+        ],
+    }
+
+
+@router.post("/{invoice_id}/correction", response_model=InvoiceRead, status_code=status.HTTP_201_CREATED)
+def create_correction(
+    invoice_id: UUID,
+    payload: InvoiceCorrectionIn,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> Invoice:
+    """Rechnungskorrektur (Gutschrift) erstellen: einzelne Positionen/Mengen und/oder ein Preisnachlass.
+
+    Die Originalrechnung bleibt unverändert (GoBD). Die Korrektur erhält eine eigene Nummer (RK-…),
+    negative Beträge und verweist auf Nummer und Datum der Originalrechnung (§ 31 Abs. 5 UStDV).
+    """
+    original = _get_correctable(db, invoice_id)
+    if not payload.lines and not payload.free_lines:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bitte mindestens eine Position oder einen Nachlass angeben",
+        )
+    state = _correction_state(db, original)
+    items_by_id = {it.id: it for it in original.items}
+    allowed_rates = {Decimal(it.vat_rate).quantize(_CENT) for it in original.items}
+
+    # 1. Alles prüfen und berechnen, bevor etwas gespeichert wird
+    new_items: list[dict] = []
+    seen: set[UUID] = set()
+    for line in payload.lines:
+        if line.item_id in seen:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eine Position ist doppelt angegeben")
+        seen.add(line.item_id)
+        orig_item = items_by_id.get(line.item_id)
+        if orig_item is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position gehört nicht zu dieser Rechnung")
+        remaining = Decimal(orig_item.quantity) - state["credited_qty"].get(orig_item.id, Decimal("0"))
+        if line.quantity > remaining:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"„{orig_item.description}“: Es können höchstens {remaining.normalize():f} gutgeschrieben werden.",
+            )
+        stock_qty = 0
+        if line.return_to_stock:
+            if not orig_item.article_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"„{orig_item.description}“ ist kein Lagerartikel und kann nicht ins Lager zurückgebucht werden",
+                )
+            stock_qty = decimal_quantity_to_int_units(line.quantity)
+        new_items.append({
+            "article_id": orig_item.article_id,
+            "description": orig_item.description,
+            "quantity": -line.quantity,
+            "unit": orig_item.unit,
+            "unit_price": Decimal(orig_item.unit_price),
+            "vat_rate": Decimal(orig_item.vat_rate).quantize(_CENT),
+            "line_total_net": -(line.quantity * Decimal(orig_item.unit_price)).quantize(_CENT, rounding=ROUND_HALF_UP),
+            "corrects_item_id": orig_item.id,
+            "returned_to_stock": line.return_to_stock,
+            "_stock_qty": stock_qty,
+        })
+    for free in payload.free_lines:
+        rate = free.vat_rate.quantize(_CENT)
+        if rate not in allowed_rates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Der Nachlass muss einen Steuersatz der Originalrechnung haben",
+            )
+        new_items.append({
+            "article_id": None,
+            "description": free.description,
+            "quantity": Decimal("-1"),
+            "unit": None,
+            "unit_price": free.net_amount,
+            "vat_rate": rate,
+            "line_total_net": -free.net_amount,
+            "corrects_item_id": None,
+            "returned_to_stock": False,
+            "_stock_qty": 0,
+        })
+
+    # Summen wie in _recalc_totals (MwSt je Steuersatz kaufmännisch gerundet)
+    bases: dict[Decimal, Decimal] = {}
+    for it in new_items:
+        bases[it["vat_rate"]] = bases.get(it["vat_rate"], Decimal("0")) + it["line_total_net"]
+    gross = sum(bases.values(), Decimal("0")) + sum(
+        ((b * r / 100).quantize(_CENT, rounding=ROUND_HALF_UP) for r, b in bases.items()), Decimal("0")
+    )
+    if Decimal(original.gross_amount) - state["credited_gross"] + gross < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Die Gutschriften wären höher als der Rechnungsbetrag",
+        )
+
+    # 2. Beleg speichern
+    correction = Invoice(
+        customer_id=original.customer_id,
+        workshop_order_id=None,
+        corrects_invoice_id=original.id,
+        document_type="correction",
+        invoice_number=_next_correction_number(db),
+        invoice_date=date.today(),
+        service_date=original.service_date,
+        due_date=date.today(),
+        status="issued",
+        currency=original.currency,
+        net_amount=0,
+        vat_amount=0,
+        gross_amount=0,
+        notes=(
+            f"Rechnungskorrektur zu Rechnung {original.invoice_number} vom "
+            f"{original.invoice_date.strftime('%d.%m.%Y')}. Grund: {payload.reason}"
+        ),
+        created_by=current_user.id,
+    )
+    db.add(correction)
+    db.flush()
+    stock_returns: list[tuple[InvoiceItem, int]] = []
+    for data in new_items:
+        stock_qty = data.pop("_stock_qty")
+        item = InvoiceItem(invoice_id=correction.id, **data)
+        db.add(item)
+        if stock_qty:
+            stock_returns.append((item, stock_qty))
+    _recalc_totals(db, correction)
+
+    # 3. Zurückgenommene Teile ins Lager buchen
+    for item, qty in stock_returns:
+        apply_stock_change(
+            db,
+            article_id=item.article_id,
+            quantity=qty,
+            movement_type="incoming",
+            reference_type="invoice_item",
+            reference_id=item.id,
+            notes=f"Rücknahme lt. Rechnungskorrektur {correction.invoice_number}",
+            user_id=current_user.id,
+        )
+
+    log_audit(
+        db,
+        user_id=current_user.id,
+        entity_type="invoice",
+        entity_id=original.id,
+        action="correction",
+        new_values={
+            "correction_invoice_number": correction.invoice_number,
+            "correction_invoice_id": str(correction.id),
+            "gross_amount": str(correction.gross_amount),
+            "reason": payload.reason,
+        },
+    )
+    db.commit()
+    db.refresh(correction)
+    return correction
 
 
 @router.get("/{invoice_id}/pdf")
@@ -564,11 +861,14 @@ def send_invoice_email(
             detail=f"PDF konnte nicht erstellt werden: {exc}",
         ) from exc
 
-    filename = f"Rechnung_{inv.invoice_number}.pdf"
-    subject = f"Rechnung {inv.invoice_number} – {company_name}"
+    doc_title = {"cancellation": "Stornorechnung", "correction": "Rechnungskorrektur"}.get(inv.document_type, "Rechnung")
+    filename = f"{doc_title}_{inv.invoice_number}.pdf"
+    subject = f"{doc_title} {inv.invoice_number} – {company_name}"
+    ref = inv.referenced_invoice
+    ref_text = f" zur Rechnung {ref.invoice_number} vom {ref.invoice_date.strftime('%d.%m.%Y')}" if ref else ""
     body = f"""Sehr geehrte Damen und Herren,
 
-anbei erhalten Sie die Rechnung {inv.invoice_number}.
+anbei erhalten Sie die {doc_title} {inv.invoice_number}{ref_text}.
 
 Mit freundlichen Grüßen
 {company_name}
@@ -607,7 +907,7 @@ Mit freundlichen Grüßen
     )
     db.commit()
 
-    return {"message": "Rechnung wurde per E-Mail versendet.", "recipient": recipient}
+    return {"message": f"{doc_title} wurde per E-Mail versendet.", "recipient": recipient}
 
 
 @router.get("/{invoice_id}/zugferd")

@@ -136,10 +136,11 @@ def build_zugferd_xml(db: Session, inv: Invoice) -> bytes:
     doc.header.type_code = "380"                            # BT-3 Handelsrechnung
     doc.header.issue_date_time = inv.invoice_date           # BT-2
 
-    original = getattr(inv, "cancellation_of", None)
+    original = getattr(inv, "referenced_invoice", None) or getattr(inv, "cancellation_of", None)
     if original is not None:
         note = IncludedNote()
-        note.content = f"Stornorechnung zu Rechnung {original.invoice_number}"
+        label = "Rechnungskorrektur" if getattr(inv, "document_type", "") == "correction" else "Stornorechnung"
+        note.content = f"{label} zu Rechnung {original.invoice_number}"
         doc.header.notes.add(note)
         doc.trade.settlement.invoice_referenced_document.issuer_assigned_id = original.invoice_number  # BT-25
         doc.trade.settlement.invoice_referenced_document.issue_date_time = original.invoice_date      # BT-26
@@ -192,8 +193,8 @@ def build_zugferd_xml(db: Session, inv: Invoice) -> bytes:
         pm.type_code = PAYMENT_NOT_DEFINED
     doc.trade.settlement.payment_means.add(pm)
 
-    # Zahlungsbedingungen / Fälligkeit (BT-9)
-    if inv.due_date:
+    # Zahlungsbedingungen / Fälligkeit (BT-9) – nicht bei Storno-/Korrekturbelegen (kein Zahlungsziel)
+    if inv.due_date and getattr(inv, "document_type", "invoice") == "invoice":
         terms = PaymentTerms()
         terms.description = f"Zahlbar bis {inv.due_date.strftime('%d.%m.%Y')}"
         terms.due = inv.due_date

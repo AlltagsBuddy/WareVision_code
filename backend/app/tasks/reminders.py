@@ -30,6 +30,7 @@ def check_overdue_invoices(self) -> dict:
             db.query(Invoice)
             .filter(
                 Invoice.status.in_(["issued", "partially_paid"]),
+                Invoice.document_type == "invoice",  # Storno-/Korrekturbelege sind keine Forderungen
                 Invoice.due_date.isnot(None),
                 Invoice.due_date < today,
                 Invoice.reminder_level == 0,

@@ -79,6 +79,8 @@ class InvoiceItemRead(BaseModel):
     unit_price: Decimal
     vat_rate: Decimal
     line_total_net: Decimal
+    corrects_item_id: Optional[UUID] = None
+    returned_to_stock: bool = False
 
     class Config:
         from_attributes = True
@@ -92,6 +94,8 @@ class InvoiceRead(BaseModel):
     workshop_order_id: Optional[UUID] = None
     cancellation_of_id: Optional[UUID] = None
     cancellation_invoice_id: Optional[UUID] = None
+    corrects_invoice_id: Optional[UUID] = None
+    document_type: str = "invoice"
     invoice_number: str
     invoice_date: date
     service_date: Optional[date] = None
@@ -108,3 +112,61 @@ class InvoiceRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CorrectionLineIn(BaseModel):
+    """Gutzuschreibende Menge einer Originalposition."""
+
+    item_id: UUID
+    quantity: Decimal = Field(..., gt=0)
+    return_to_stock: bool = False
+
+    @field_validator("quantity")
+    @classmethod
+    def two_decimals(cls, v: Decimal) -> Decimal:
+        """Höchstens zwei Nachkommastellen (wie in der Rechnung gespeichert)."""
+        if v != v.quantize(Decimal("0.01")):
+            raise ValueError("Menge mit höchstens zwei Nachkommastellen angeben")
+        return v
+
+
+class CorrectionFreeLineIn(BaseModel):
+    """Freier Betrag, z. B. Preisnachlass oder Kulanz (Netto, positiv eingeben)."""
+
+    description: str = Field(..., min_length=1, max_length=500)
+    net_amount: Decimal = Field(..., gt=0)
+    vat_rate: Decimal
+
+    @field_validator("description")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        """Beschreibung darf nicht leer sein."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Beschreibung darf nicht leer sein")
+        return v
+
+    @field_validator("net_amount")
+    @classmethod
+    def cents(cls, v: Decimal) -> Decimal:
+        """Auf Cent genau."""
+        if v != v.quantize(Decimal("0.01")):
+            raise ValueError("Betrag auf Cent genau angeben")
+        return v
+
+
+class InvoiceCorrectionIn(BaseModel):
+    """Rechnungskorrektur (Gutschrift) zu einer ausgestellten oder bezahlten Rechnung."""
+
+    reason: str = Field(..., min_length=3, max_length=500)
+    lines: list[CorrectionLineIn] = []
+    free_lines: list[CorrectionFreeLineIn] = []
+
+    @field_validator("reason")
+    @classmethod
+    def reason_not_blank(cls, v: str) -> str:
+        """Grund ist Pflicht (Nachvollziehbarkeit, GoBD)."""
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Bitte einen Grund angeben")
+        return v

@@ -226,21 +226,28 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
     story.append(HRFlowable(width="100%", thickness=1.5, color=_HEADER_BG))
     story.append(Spacer(1, 6 * mm))
 
-    # --- Rechnungstitel ---
-    story.append(Paragraph("<b>Rechnung</b>", ParagraphStyle(
+    # --- Rechnungstitel (Rechnung / Stornorechnung / Rechnungskorrektur) ---
+    doc_type = getattr(inv, "document_type", "invoice") or "invoice"
+    is_credit_doc = doc_type in ("cancellation", "correction")
+    doc_title = {"cancellation": "Stornorechnung", "correction": "Rechnungskorrektur"}.get(doc_type, "Rechnung")
+    story.append(Paragraph(f"<b>{doc_title}</b>", ParagraphStyle(
         "InvoiceTitle", parent=normal, fontSize=18, leading=22, fontName="Helvetica-Bold",
     )))
     story.append(Spacer(1, 6 * mm))
 
     # --- Meta + Rechnungsadresse nebeneinander ---
     inv_lines = [
-        f"<b>Rechnungsnummer:</b> {inv.invoice_number}",
+        f"<b>{'Belegnummer' if is_credit_doc else 'Rechnungsnummer'}:</b> {inv.invoice_number}",
         f"<b>Datum:</b> {inv.invoice_date.strftime('%d.%m.%Y')}",
     ]
+    # Eindeutiger Bezug auf die Originalrechnung (§ 31 Abs. 5 UStDV)
+    ref = getattr(inv, "referenced_invoice", None)
+    if ref is not None:
+        inv_lines.append(f"<b>Zur Rechnung:</b> {ref.invoice_number} vom {ref.invoice_date.strftime('%d.%m.%Y')}")
     # Leistungsdatum (Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG)
     if inv.service_date:
         inv_lines.append(f"<b>Leistungsdatum:</b> {inv.service_date.strftime('%d.%m.%Y')}")
-    if inv.due_date:
+    if inv.due_date and not is_credit_doc:
         inv_lines.append(f"<b>Fällig:</b> {inv.due_date.strftime('%d.%m.%Y')}")
     meta_para = Paragraph("<br/>".join(inv_lines), normal_sm)
 
@@ -336,8 +343,16 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
     ]))
     story.append(sum_table)
 
-    # --- Bankverbindung ---
-    if company_bank_name or company_bank_iban or company_bank_bic:
+    if doc_type == "correction":
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph(
+            f"Der Betrag von <b>{_fmt_eur(-inv.gross_amount)}</b> wird Ihnen erstattet "
+            "bzw. mit offenen Beträgen der genannten Rechnung verrechnet.",
+            normal_sm,
+        ))
+
+    # --- Bankverbindung (nur bei Rechnungen, nicht bei Storno-/Korrekturbelegen) ---
+    if not is_credit_doc and (company_bank_name or company_bank_iban or company_bank_bic):
         story.append(Spacer(1, 8 * mm))
         bank_lines = ["<b>Bankverbindung:</b>"]
         if company_bank_holder:

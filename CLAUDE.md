@@ -76,6 +76,7 @@ WareVision_code/
 | Wartungspläne | ✅ | ✅ |
 | Terminplaner | ✅ | ✅ |
 | Rechnungen (PDF) | ✅ | ✅ |
+| Rechnungskorrektur / Gutschrift (RK-…, Teilmengen, Nachlass, Lagerrücknahme) | ✅ | ✅ |
 | Dokumentenmanagement | ✅ | ✅ |
 | Audit-Log | ✅ | ✅ |
 | Einstellungen | ✅ | ✅ |

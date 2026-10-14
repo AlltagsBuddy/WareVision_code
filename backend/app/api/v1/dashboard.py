@@ -42,6 +42,7 @@ def get_dashboard_stats(
         db.query(func.count(Invoice.id))
         .filter(
             Invoice.status.in_(["issued", "partially_paid"]),
+            Invoice.document_type == "invoice",  # Storno-/Korrekturbelege sind keine Forderungen
             Invoice.due_date.isnot(None),
             Invoice.due_date < today,
         )
