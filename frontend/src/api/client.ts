@@ -544,6 +544,23 @@ export const accountingApi = {
     }
     return res.blob()
   },
+  datevSettings: () => api<any>('/accounting/datev/settings'),
+  saveDatevSettings: (data: Record<string, unknown>) =>
+    api<any>('/accounting/datev/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  datevPreview: (dateFrom: string, dateTo: string, includeIncoming: boolean) =>
+    api<any>(`/accounting/datev/preview?${new URLSearchParams({ date_from: dateFrom, date_to: dateTo, include_incoming: String(includeIncoming) })}`),
+  datevExport: async (dateFrom: string, dateTo: string, includeIncoming: boolean): Promise<Blob> => {
+    const token = getToken()
+    const p = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, include_incoming: String(includeIncoming) })
+    const res = await fetch(`${API_BASE}/accounting/datev/export?${p}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'DATEV-Export fehlgeschlagen')
+    }
+    return res.blob()
+  },
 }
 
 export const incomingInvoicesApi = {

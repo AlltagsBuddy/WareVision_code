@@ -24,6 +24,7 @@ from app.models.incoming_invoice import IncomingInvoice
 from app.models.quote import Quote, QuoteItem
 from app.models.stock_count import StockCount, StockCountItem
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+from app.models.datev import DatevAccount
 
 __all__ = [
     "BaseModel",
@@ -58,4 +59,5 @@ __all__ = [
     "StockCountItem",
     "PurchaseOrder",
     "PurchaseOrderItem",
+    "DatevAccount",
 ]

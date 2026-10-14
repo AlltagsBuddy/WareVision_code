@@ -128,3 +128,18 @@ def test_rechnungskorrektur_kulanz(page, base_url):
     assert "korrigiert durch RK-" in row.inner_text()
     assert row.locator("text=Stornieren").count() == 0  # nach Korrektur nur noch weitere Korrekturen möglich
     assert not page.js_errors
+
+
+def test_datev_export_vorschau(page, base_url):
+    page.goto(f"{base_url}/accounting")
+    _api(page, base_url, "PUT", "/accounting/datev/settings",
+         {"consultant_number": 1234567, "client_number": 56789, "chart": "SKR03"})
+    page.reload()
+    page.wait_for_selector("text=DATEV-Export (Buchungsstapel)")
+    page.click("button:has-text('Vorschau')")
+    page.wait_for_selector("text=Ausgangsrechnungen:")
+    assert "Belege" in page.locator("body").inner_text()
+    with page.expect_download() as dl:
+        page.click("text=DATEV-Export herunterladen")
+    assert dl.value.suggested_filename.startswith("DATEV_")
+    assert not page.js_errors

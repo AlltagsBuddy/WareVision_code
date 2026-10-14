@@ -77,6 +77,7 @@ WareVision_code/
 | Terminplaner | ✅ | ✅ |
 | Rechnungen (PDF) | ✅ | ✅ |
 | Rechnungskorrektur / Gutschrift (RK-…, Teilmengen, Nachlass, Lagerrücknahme) | ✅ | ✅ |
+| DATEV-Export (Buchungsstapel EXTF 700/v13, Debitoren/Kreditoren, SKR03/04) | ✅ | ✅ |
 | Dokumentenmanagement | ✅ | ✅ |
 | Audit-Log | ✅ | ✅ |
 | Einstellungen | ✅ | ✅ |

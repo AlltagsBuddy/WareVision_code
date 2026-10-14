@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { accountingApi, customersApi, incomingInvoicesApi, invoicesApi } from '../api/client'
+import DatevExport from '../components/DatevExport'
 
 type Preset = 'current_month' | 'last_month' | 'current_quarter' | 'last_quarter' | 'current_year' | 'last_year' | 'custom'
 type AccountTab = 'b2c' | 'b2b' | 'incoming'
@@ -68,7 +69,7 @@ function getPresetDates(preset: Preset): { from: string; to: string } {
 
 const emptyIncomingForm = {
   supplier_name: '', invoice_number: '', invoice_date: new Date().toISOString().slice(0, 10),
-  due_date: '', net_amount: '', vat_rate: '19', category: '', notes: '',
+  due_date: '', net_amount: '', vat_rate: '19', category: '', notes: '', is_credit_note: false,
 }
 
 export default function Accounting() {
@@ -197,6 +198,7 @@ export default function Accounting() {
         vat_rate: parseFloat(incomingForm.vat_rate) || 19,
         category: incomingForm.category || undefined,
         notes: incomingForm.notes || undefined,
+        is_credit_note: incomingForm.is_credit_note,
       }
       if (editingIncomingId) {
         const updated = await incomingInvoicesApi.update(editingIncomingId, payload)
@@ -225,6 +227,7 @@ export default function Accounting() {
       vat_rate: String(inv.vat_rate),
       category: inv.category || '',
       notes: inv.notes || '',
+      is_credit_note: !!inv.is_credit_note,
     })
     setEditingIncomingId(inv.id)
     setShowIncomingForm(true)
@@ -553,6 +556,12 @@ export default function Accounting() {
                       <label>Notiz</label>
                       <input value={incomingForm.notes} onChange={(e) => setIncomingForm({ ...incomingForm, notes: e.target.value })} placeholder="Optional" />
                     </div>
+                    <div className="form-group" style={{ flex: '1 1 200px', display: 'flex', alignItems: 'flex-end' }}>
+                      <label style={{ fontWeight: 400 }}>
+                        <input type="checkbox" checked={incomingForm.is_credit_note} onChange={(e) => setIncomingForm({ ...incomingForm, is_credit_note: e.target.checked })} />{' '}
+                        Gutschrift des Lieferanten
+                      </label>
+                    </div>
                   </div>
                   {incomingFormError && <p className="error">{incomingFormError}</p>}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -594,6 +603,9 @@ export default function Accounting() {
                             <span title="Importierte E-Rechnung" style={{ marginLeft: '0.4rem', fontSize: '0.72rem', padding: '0.05rem 0.35rem', borderRadius: '4px', border: '1px solid currentColor', color: 'var(--color-primary, #22d3ee)' }}>
                               {inv.einvoice_format === 'zugferd' ? 'ZUGFeRD' : 'XRechnung'}
                             </span>
+                          )}
+                          {inv.is_credit_note && (
+                            <span style={{ marginLeft: '0.4rem', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>Gutschrift</span>
                           )}
                         </td>
                         <td>{inv.supplier_name}</td>
@@ -697,6 +709,9 @@ export default function Accounting() {
           </div>
         </div>
       )}
+
+      {/* DATEV-Export */}
+      <DatevExport getRange={getDates} />
     </div>
   )
 }

@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,8 @@ class IncomingInvoice(BaseModel):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Importierte E-Rechnung: Format und unverändertes Original (GoBD)
+    # Gutschrift/Rechnungskorrektur des Lieferanten (wird in DATEV umgekehrt gebucht)
+    is_credit_note: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     einvoice_format: Mapped[str | None] = mapped_column(String(30), nullable=True)  # zugferd, xrechnung_cii, xrechnung_ubl
     original_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)

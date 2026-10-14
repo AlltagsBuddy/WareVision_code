@@ -21,6 +21,7 @@ class IncomingInvoiceCreate(BaseModel):
     gross_amount: Decimal = Field(default=Decimal("0.00"))
     category: Optional[str] = None
     notes: Optional[str] = None
+    is_credit_note: bool = False  # Gutschrift/Rechnungskorrektur des Lieferanten
 
     @model_validator(mode="after")
     def berechne_betraege(self) -> "IncomingInvoiceCreate":
@@ -42,6 +43,7 @@ class IncomingInvoiceUpdate(BaseModel):
     status: Optional[str] = None
     category: Optional[str] = None
     notes: Optional[str] = None
+    is_credit_note: Optional[bool] = None
 
 
 class IncomingInvoiceRead(BaseModel):
@@ -61,6 +63,7 @@ class IncomingInvoiceRead(BaseModel):
     notes: Optional[str] = None
     pdf_path: Optional[str] = None
     einvoice_format: Optional[str] = None
+    is_credit_note: bool = False
     original_filename: Optional[str] = None
     original_sha256: Optional[str] = None
     service_date: Optional[date] = None

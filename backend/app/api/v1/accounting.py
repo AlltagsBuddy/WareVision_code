@@ -280,3 +280,157 @@ def export_accounting(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# DATEV-Export (Buchungsstapel im DATEV-Format)
+# ---------------------------------------------------------------------------
+
+from typing import Literal  # noqa: E402
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+from app.models.user import User  # noqa: E402
+from app.services import datev as datev_service  # noqa: E402
+from app.services.audit import log_audit  # noqa: E402
+
+
+class DatevSettingsIn(BaseModel):
+    """DATEV-Einstellungen (vom Steuerberater erfragen)."""
+
+    consultant_number: int | None = Field(default=None, ge=1001, le=9999999)
+    client_number: int | None = Field(default=None, ge=1, le=99999)
+    chart: Literal["SKR03", "SKR04"] = "SKR03"
+    account_length: int = Field(default=4, ge=4, le=8)
+    fiscal_year_start_month: int = Field(default=1, ge=1, le=12)
+    debtor_start: int | None = None
+    creditor_start: int | None = None
+    lock_bookings: bool = False
+    revenue_19: str = ""
+    revenue_7: str = ""
+    revenue_0: str = ""
+    expense_19: str = ""
+    expense_7: str = ""
+    expense_0: str = ""
+
+
+def _settings_out(db: Session) -> dict:
+    s = datev_service.load_settings(db)
+    return {
+        "consultant_number": s.consultant_number,
+        "client_number": s.client_number,
+        "chart": s.chart,
+        "account_length": s.account_length,
+        "fiscal_year_start_month": s.fiscal_year_start_month,
+        "debtor_start": s.debtor_start,
+        "creditor_start": s.creditor_start,
+        "lock_bookings": s.lock_bookings,
+        **s.accounts,
+        "account_labels": datev_service.ACCOUNT_LABELS,
+        "default_accounts": datev_service.DEFAULT_ACCOUNTS,
+        "problems": datev_service.settings_problems(s),
+    }
+
+
+@router.get("/datev/settings")
+def get_datev_settings(db: Annotated[Session, Depends(get_db)], _=Depends(require_admin)) -> dict:
+    """DATEV-Einstellungen inkl. Kontenvorschlägen und offenen Punkten."""
+    return _settings_out(db)
+
+
+@router.put("/datev/settings")
+def update_datev_settings(
+    payload: DatevSettingsIn,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> dict:
+    """DATEV-Einstellungen speichern. Leere Konten = Vorschlag des Kontenrahmens."""
+    values = payload.model_dump()
+    for key in datev_service.ACCOUNT_KEYS:
+        values[key] = (values[key] or "").strip()
+        if values[key] and not values[key].isdigit():
+            raise HTTPException(status_code=400, detail=f"Konto „{datev_service.ACCOUNT_LABELS[key]}“: nur Ziffern erlaubt")
+    datev_service.save_settings(db, values)
+    log_audit(db, user_id=current_user.id, entity_type="settings", action="datev_settings",
+              new_values={k: v for k, v in values.items() if k in ("chart", "account_length", "consultant_number", "client_number")})
+    db.commit()
+    return _settings_out(db)
+
+
+def _datev_run(db: Session, date_from: date, date_to: date, include_incoming: bool, persist: bool):
+    s = datev_service.load_settings(db)
+    problems = datev_service.settings_problems(s)
+    if problems:
+        raise HTTPException(status_code=400, detail="DATEV-Einstellungen unvollständig: " + " ".join(problems))
+    try:
+        res = datev_service.collect(db, s, date_from, date_to, persist=persist, include_incoming=include_incoming)
+    except datev_service.DatevError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return s, res
+
+
+@router.get("/datev/preview")
+def datev_preview(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    include_incoming: bool = True,
+    db: Annotated[Session, Depends(get_db)] = None,
+    _=Depends(require_admin),
+) -> dict:
+    """Vorschau: Anzahl Belege/Buchungen, Summen und Hinweise – ohne etwas zu speichern."""
+    s, res = _datev_run(db, date_from, date_to, include_incoming, persist=False)  # speichert nichts
+
+    def total(bookings, dc):
+        return str(sum((b.amount for b in bookings if b.debit_credit == dc), Decimal("0")))
+
+    return {
+        "fiscal_year_start": datev_service.fiscal_year_start(s, date_from).isoformat(),
+        "outgoing_documents": res.outgoing_docs,
+        "outgoing_bookings": len(res.outgoing),
+        "outgoing_debit": total(res.outgoing, "S"),
+        "outgoing_credit": total(res.outgoing, "H"),
+        "incoming_documents": res.incoming_docs,
+        "incoming_bookings": len(res.incoming),
+        "incoming_credit": total(res.incoming, "H"),
+        "incoming_debit": total(res.incoming, "S"),
+        "new_accounts": res.new_accounts,
+        "hints": res.hints,
+    }
+
+
+@router.get("/datev/export")
+def datev_export(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    include_incoming: bool = True,
+    db: Annotated[Session, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(require_admin)] = None,
+) -> Response:
+    """DATEV-Export als ZIP (Buchungsstapel Ausgang/Eingang, Personenkonten, LIESMICH)."""
+    s, res = _datev_run(db, date_from, date_to, include_incoming, persist=True)
+    user = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+    content = datev_service.build_export_zip(s, res, date_from, date_to, user)
+    log_audit(
+        db, user_id=current_user.id, entity_type="accounting", action="datev_export",
+        new_values={
+            "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
+            "outgoing_bookings": len(res.outgoing), "incoming_bookings": len(res.incoming),
+            "new_accounts": res.new_accounts, "hints": len(res.hints),
+        },
+    )
+    db.commit()  # neu vergebene Debitoren-/Kreditorennummern dauerhaft speichern
+    filename = f"DATEV_{date_from.strftime('%Y%m%d')}_{date_to.strftime('%Y%m%d')}.zip"
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/datev/accounts")
+def datev_accounts(db: Annotated[Session, Depends(get_db)], _=Depends(require_admin)) -> list[dict]:
+    """Bereits vergebene Debitoren- und Kreditorennummern."""
+    from app.models.datev import DatevAccount
+
+    rows = db.query(DatevAccount).order_by(DatevAccount.account_number).all()
+    return [{"account_number": r.account_number, "kind": r.kind, "name": r.name} for r in rows]

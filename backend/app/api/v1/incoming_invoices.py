@@ -83,6 +83,7 @@ def create_incoming_invoice(
         status="pending",
         category=payload.category,
         notes=payload.notes,
+        is_credit_note=payload.is_credit_note,
         created_by=current_user.id,
     )
     db.add(inv)
@@ -173,6 +174,7 @@ async def import_einvoice(
         vat_rate=data["vat_rate"],
         status="pending",
         notes=notes,
+        is_credit_note=bool(data["is_credit_note"]),
         pdf_path=str(original_path) if data["format"] == FORMAT_ZUGFERD else None,
         einvoice_format=data["format"],
         original_path=str(original_path),

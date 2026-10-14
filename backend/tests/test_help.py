@@ -82,6 +82,8 @@ class TestSuche:
         ("Was muss ich nachbestellen?", "bestellungen"),
         ("Wie erstelle ich eine Gutschrift für eine bezahlte Rechnung?", "rechnungen"),
         ("Kunde hat ein Teil zurückgegeben, Teilgutschrift", "rechnungen"),
+        ("Wo trage ich die Beraternummer für DATEV ein?", "buchhaltung"),
+        ("DATEV Export für den Steuerberater", "buchhaltung"),
         ("Wie lange muss ich Rechnungen aufbewahren?", "recht_und_fristen"),
     ])
     def test_relevanter_treffer(self, frage, kapitel):

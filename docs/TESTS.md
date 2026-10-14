@@ -1,14 +1,14 @@
 # Automatische Tests – WareVision
 
-Stand: 14.10.2026 (mit Bestellwesen und Rechnungskorrektur)
+Stand: 14.10.2026 (mit Bestellwesen, Rechnungskorrektur und DATEV-Export)
 
 Es gibt drei Ebenen von Tests:
 
 | Ebene | Ort | Werkzeug | Anzahl (Stand) |
 |---|---|---|---|
-| Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 332 |
-| Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 75 |
-| Ende-zu-Ende im Browser | `e2e/` | pytest + Playwright | 25 |
+| Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 358 |
+| Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 82 |
+| Ende-zu-Ende im Browser | `e2e/` | pytest + Playwright | 26 |
 
 ---
 
@@ -30,7 +30,7 @@ Schritt für Schritt (PowerShell, im Ordner `D:\WareVision\WareVision_code`):
    ```powershell
    docker compose exec backend sh -c "pip install -q -r requirements-test.txt && pytest -q"
    ```
-3. Ergebnis: Am Ende steht z. B. `331 passed, 1 skipped`.
+3. Ergebnis: Am Ende steht z. B. `357 passed, 1 skipped`.
    `skipped` ist die optionale Schematron-Prüfung (siehe Punkt 4).
 
 Einzelne Bereiche testen:
@@ -47,6 +47,7 @@ docker compose exec backend pytest -q -k Inventur
 | `test_quotes.py` | Angebote/KVA: Summen je Steuersatz, Statuswechsel, Umwandlung in Werkstattauftrag inkl. Lagerbuchung, PDF (§ 649 BGB-Hinweis), E-Mail (simuliert) |
 | `test_purchase_orders.py` | Bestellwesen: Bestellvorschlag (Mindest-/Zielbestand, Reservierungen, offene Bestellungen), Summen, PDF, E-Mail, Wareneingang mit Teillieferung, Storno, Rechte |
 | `test_invoice_corrections.py` | Rechnungskorrektur/Gutschrift: Teilmengen, Nachlass, Obergrenzen, Lagerrücknahme, Storno der Korrektur, keine Mahnung/Überfälligkeit, PDF mit Bezug, ZUGFeRD (XSD + optional Schematron), Steuerberater-Export |
+| `test_datev.py` | DATEV-Export: Kopfzeile EXTF 700/Formatversion 13 (31 Felder), 125 Spalten, Windows-1252, CR/LF, Buchungen je Steuersatz (Summe = Rechnungsbrutto), Storno/Korrektur im Haben, Eingangsrechnungen und Lieferanten-Gutschriften, Belegfeld-Bereinigung, dauerhafte Debitoren/Kreditoren, Stammdatei (254 Felder), Wirtschaftsjahr, Einstellungen |
 | `test_stock_counts.py` | Inventur: Blindzählung, Buchungen während der Zählung, Differenzbuchung, CSV/PDF |
 | `test_einvoice.py` | Rechnungen: Pflichtangaben § 14 UStG, MwSt je Satz, Storno, ZUGFeRD EN16931 (XSD-Prüfung), PDF/A-3, eingebettete Schriften; Eingangsrechnungen ZUGFeRD/XRechnung (UBL + CII), Dubletten, GoBD-Archiv |
 | `test_stammdaten.py` | Lieferanten, Lagerorte, Kategorien, Stundensätze, Hersteller, Barcode, Reservierungen |
