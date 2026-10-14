@@ -1,14 +1,14 @@
 # Automatische Tests – WareVision
 
-Stand: 14.10.2026
+Stand: 14.10.2026 (mit Bestellwesen)
 
 Es gibt drei Ebenen von Tests:
 
 | Ebene | Ort | Werkzeug | Anzahl (Stand) |
 |---|---|---|---|
-| Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 271 |
-| Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 57 |
-| Ende-zu-Ende im Browser | `e2e/` | pytest + Playwright | 22 |
+| Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 307 |
+| Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 68 |
+| Ende-zu-Ende im Browser | `e2e/` | pytest + Playwright | 24 |
 
 ---
 
@@ -30,7 +30,7 @@ Schritt für Schritt (PowerShell, im Ordner `D:\WareVision\WareVision_code`):
    ```powershell
    docker compose exec backend sh -c "pip install -q -r requirements-test.txt && pytest -q"
    ```
-3. Ergebnis: Am Ende steht z. B. `270 passed, 1 skipped`.
+3. Ergebnis: Am Ende steht z. B. `306 passed, 1 skipped`.
    `skipped` ist die optionale Schematron-Prüfung (siehe Punkt 4).
 
 Einzelne Bereiche testen:
@@ -45,6 +45,7 @@ docker compose exec backend pytest -q -k Inventur
 | Datei | Inhalt |
 |---|---|
 | `test_quotes.py` | Angebote/KVA: Summen je Steuersatz, Statuswechsel, Umwandlung in Werkstattauftrag inkl. Lagerbuchung, PDF (§ 649 BGB-Hinweis), E-Mail (simuliert) |
+| `test_purchase_orders.py` | Bestellwesen: Bestellvorschlag (Mindest-/Zielbestand, Reservierungen, offene Bestellungen), Summen, PDF, E-Mail, Wareneingang mit Teillieferung, Storno, Rechte |
 | `test_stock_counts.py` | Inventur: Blindzählung, Buchungen während der Zählung, Differenzbuchung, CSV/PDF |
 | `test_einvoice.py` | Rechnungen: Pflichtangaben § 14 UStG, MwSt je Satz, Storno, ZUGFeRD EN16931 (XSD-Prüfung), PDF/A-3, eingebettete Schriften; Eingangsrechnungen ZUGFeRD/XRechnung (UBL + CII), Dubletten, GoBD-Archiv |
 | `test_stammdaten.py` | Lieferanten, Lagerorte, Kategorien, Stundensätze, Hersteller, Barcode, Reservierungen |

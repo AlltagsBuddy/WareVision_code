@@ -53,7 +53,7 @@ _DB_URL = _test_db_url()
 
 @pytest.fixture(scope="session")
 def test_engine():
-    """Session-scoped Engine auf die warevision-Datenbank."""
+    """Session-scoped Engine auf die Testdatenbank (warevision_test)."""
     _ensure_database(_DB_URL)
     engine = create_engine(_DB_URL, pool_pre_ping=True)
 
@@ -61,7 +61,11 @@ def test_engine():
     from app.core.database import Base
     from app.core.database import init_db as _register_models
     _register_models()
-    Base.metadata.create_all(bind=engine)  # legt fehlende Tabellen an
+    # Testdatenbank bei jedem Lauf frisch aufbauen, damit neue Spalten/Tabellen immer vorhanden sind.
+    # Sicherheitsnetz: niemals die echte Datenbank leeren.
+    assert make_url(_DB_URL).database != "warevision", "Tests dürfen nicht auf der echten Datenbank laufen"
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
 
     yield engine
     engine.dispose()

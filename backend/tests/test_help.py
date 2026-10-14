@@ -50,7 +50,7 @@ def ai_key(db):
 class TestWissensbasis:
     def test_alle_module_beschrieben(self):
         titles = " ".join(a.title for a in ha.load_articles())
-        for module in ("Kunden", "Fahrzeuge", "Artikel", "Lieferanten", "Lager", "Inventur", "Angebote",
+        for module in ("Kunden", "Fahrzeuge", "Artikel", "Lieferanten", "Lager", "Bestellungen", "Inventur", "Angebote",
                        "Werkstattaufträge", "Wartungspläne", "Terminplaner", "Rechnungen", "Buchhaltung",
                        "Dokumente", "Einstellungen", "Benutzer"):
             assert module in titles, f"Hilfe zu „{module}“ fehlt"
@@ -78,6 +78,8 @@ class TestSuche:
         ("Wo trage ich die IBAN ein?", "einstellungen"),
         ("Leistungsdatum auf der Rechnung", "rechnungen"),
         ("Barcode scannen im Lager", "lager"),
+        ("Wie buche ich den Wareneingang einer Bestellung?", "bestellungen"),
+        ("Was muss ich nachbestellen?", "bestellungen"),
         ("Wie lange muss ich Rechnungen aufbewahren?", "recht_und_fristen"),
     ])
     def test_relevanter_treffer(self, frage, kapitel):

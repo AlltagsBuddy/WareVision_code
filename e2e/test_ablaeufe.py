@@ -1,4 +1,4 @@
-"""Fachliche Abläufe im Browser: Angebot → Werkstattauftrag, Inventur, Hilfe."""
+"""Fachliche Abläufe im Browser: Angebot → Werkstattauftrag, Bestellung → Wareneingang, Inventur, Hilfe."""
 
 from datetime import date
 
@@ -62,4 +62,32 @@ def test_inventur_zaehlen_und_abschliessen(page, base_url):
     page.click("text=Inventur abschließen")
     page.wait_for_selector("text=(Abgeschlossen)", timeout=60000)
     assert page.locator("tbody input[inputmode=numeric]").count() == 0
+    assert not page.js_errors
+
+
+def test_bestellung_anlegen_bestellen_wareneingang(page, base_url):
+    page.goto(f"{base_url}/purchase-orders")
+    page.click("text=+ Neue Bestellung")
+    supplier = page.locator("#po-supplier")
+    if supplier.locator("option").count() < 2:
+        return  # kein Lieferant in der Testinstanz
+    supplier.select_option(index=1)
+    page.fill("input[aria-label='Bezeichnung Position 1']", "E2E Testteil")
+    page.fill("input[aria-label='Menge Position 1']", "3")
+    page.fill("input[aria-label='EK Position 1']", "2,50")
+    page.locator(".modal button[type=submit]").click()
+    page.wait_for_selector("text=(Entwurf)")
+    assert "BE-" in page.locator(".modal h2").first.inner_text()
+    page.click(".modal >> text=Als bestellt markieren")
+    page.wait_for_selector("text=(Bestellt)")
+    page.click(".modal >> button:has-text('Wareneingang')")
+    page.fill("input[aria-label='Geliefert Position 1']", "2")
+    page.click("text=Wareneingang buchen")
+    page.wait_for_selector("text=(Teilweise geliefert)")
+    page.click(".modal >> button:has-text('Wareneingang')")
+    page.click("text=Wareneingang buchen")
+    page.wait_for_selector("text=(Geliefert)")
+    page.click(".modal >> text=Schließen")
+    page.click("text=Bestellvorschlag")
+    page.wait_for_timeout(500)
     assert not page.js_errors

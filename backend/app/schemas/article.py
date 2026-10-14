@@ -21,6 +21,8 @@ class ArticleCreate(BaseModel):
     sales_price_b2b: Decimal = Field(default=0, ge=0)
     vat_rate: Decimal = Field(default=Decimal("19.00"), ge=0, le=100)
     minimum_stock: int = Field(default=0, ge=0)
+    target_stock: Optional[int] = Field(default=None, ge=0)
+    supplier_article_number: Optional[str] = Field(default=None, max_length=100)
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
     oem_number: Optional[str] = None
@@ -40,7 +42,9 @@ class ArticleUpdate(BaseModel):
     sales_price_b2c: Optional[Decimal] = None
     sales_price_b2b: Optional[Decimal] = None
     vat_rate: Optional[Decimal] = None
-    minimum_stock: Optional[int] = None
+    minimum_stock: Optional[int] = Field(default=None, ge=0)
+    target_stock: Optional[int] = Field(default=None, ge=0)
+    supplier_article_number: Optional[str] = Field(default=None, max_length=100)
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
     oem_number: Optional[str] = None
@@ -65,6 +69,8 @@ class ArticleRead(BaseModel):
     vat_rate: Decimal
     stock_quantity: int
     minimum_stock: int
+    target_stock: Optional[int] = None
+    supplier_article_number: Optional[str] = None
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
     oem_number: Optional[str] = None

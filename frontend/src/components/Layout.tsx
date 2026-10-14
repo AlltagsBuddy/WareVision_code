@@ -25,6 +25,7 @@ export default function Layout() {
     { path: '/suppliers', label: 'Lieferanten', show: perm('suppliers') },
     { path: '/stock', label: 'Lager', show: perm('stock') },
     { path: '/stock-counts', label: 'Inventur', show: perm('stock_counts') },
+    { path: '/purchase-orders', label: 'Bestellungen', show: perm('purchase_orders') },
     { path: '/quotes', label: 'Angebote', show: perm('quotes') },
     { path: '/workshop-orders', label: 'Werkstattauftraege', show: perm('workshop_orders') },
     { path: '/maintenance-plans', label: 'Wartungsplaene', show: perm('maintenance_plans') },

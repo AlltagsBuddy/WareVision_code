@@ -81,6 +81,7 @@ WareVision_code/
 | Einstellungen | ✅ | ✅ |
 | Angebote / Kostenvoranschläge | ✅ | ✅ |
 | Inventur (Blindzählung, Differenzbuchung, Inventurliste PDF/CSV) | ✅ | ✅ |
+| Bestellwesen (Bestellvorschlag, Bestellung PDF/E-Mail, Wareneingang mit Teillieferung) | ✅ | ✅ |
 | E-Rechnung: ZUGFeRD-Ausgang (EN16931, PDF/A-3) | ✅ | ✅ |
 | E-Rechnung: Eingang (ZUGFeRD + XRechnung UBL/CII, GoBD-Archiv) | ✅ | ✅ |
 | Hilfe-Center + KI-Assistent (Claude Haiku, optional; Fallback Stichwortsuche) | ✅ | ✅ |

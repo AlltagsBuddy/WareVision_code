@@ -20,4 +20,5 @@ class Supplier(BaseModel):
     postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     country: Mapped[str | None] = mapped_column(String(100), default="Deutschland", nullable=True)
+    customer_number: Mapped[str | None] = mapped_column(String(100), nullable=True)  # unsere Kundennr. beim Lieferanten
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

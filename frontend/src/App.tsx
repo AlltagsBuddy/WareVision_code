@@ -13,6 +13,7 @@ import Stock from './pages/Stock'
 import WorkshopOrders from './pages/WorkshopOrders'
 import Quotes from './pages/Quotes'
 import StockCounts from './pages/StockCounts'
+import PurchaseOrders from './pages/PurchaseOrders'
 import Help from './pages/Help'
 import Appointments from './pages/Appointments'
 import Invoices from './pages/Invoices'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="stock" element={<Stock />} />
         <Route path="stock-counts" element={<StockCounts />} />
+        <Route path="purchase-orders" element={<PurchaseOrders />} />
         <Route path="help" element={<Help />} />
         <Route path="quotes" element={<Quotes />} />
         <Route path="workshop-orders" element={<WorkshopOrders />} />

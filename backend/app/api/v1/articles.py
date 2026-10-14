@@ -68,6 +68,8 @@ def create_article(
         sales_price_b2b=payload.sales_price_b2b,
         vat_rate=payload.vat_rate,
         minimum_stock=payload.minimum_stock,
+        target_stock=payload.target_stock,
+        supplier_article_number=(payload.supplier_article_number or "").strip() or None,
         barcode=payload.barcode,
         qr_code=payload.qr_code,
         oem_number=payload.oem_number,

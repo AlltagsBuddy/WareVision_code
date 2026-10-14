@@ -1,7 +1,7 @@
 # Artikel, Lagerorte und Kategorien
 
 ## Artikel anlegen
-„+ Neuer Artikel“: Pflicht sind Artikelnummer und Bezeichnung. Außerdem: Barcode (EAN/GTIN), Kategorie, Lieferant, Lagerort, Beschreibung, Einkaufspreis (EK), Verkaufspreise B2C und B2B, MwSt-Satz, Mindestbestand und kompatible Fahrzeugmodelle.
+„+ Neuer Artikel“: Pflicht sind Artikelnummer und Bezeichnung. Außerdem: Barcode (EAN/GTIN), Kategorie, Lieferant, Lagerort, Beschreibung, Einkaufspreis (EK), Verkaufspreise B2C und B2B, MwSt-Satz, Mindestbestand, Zielbestand, Artikelnummer beim Lieferanten und kompatible Fahrzeugmodelle.
 
 ## Barcode und Kamera
 Im Feld „Barcode (Enter)“ kannst du mit einem Handscanner scannen. Mit „Kamera scannen“ nutzt du die Kamera von Tablet oder Smartphone.
@@ -13,4 +13,4 @@ Im Feld „Barcode (Enter)“ kannst du mit einem Handscanner scannen. Mit „Ka
 Der Bestand eines Artikels wird nicht direkt bearbeitet, sondern über Lagerbewegungen (Bereich Lager), Werkstattaufträge, Rechnungen und Inventur geändert. So bleibt jede Änderung nachvollziehbar.
 
 ## Mindestbestand
-Fällt der Bestand unter den Mindestbestand, erscheint der Artikel im Lager unter „Mindestbestand (Warnung)“ und auf dem Dashboard.
+Fällt der Bestand unter den Mindestbestand, erscheint der Artikel im Lager unter „Mindestbestand (Warnung)“, auf dem Dashboard und im Bestellvorschlag (Bestellungen). Der Zielbestand legt fest, bis zu welcher Menge nachbestellt wird (z. B. Mindestbestand 2, Zielbestand 6). Ohne Zielbestand wird bis zum Mindestbestand aufgefüllt. Die „Artikelnummer beim Lieferanten“ erscheint auf der Bestellung.

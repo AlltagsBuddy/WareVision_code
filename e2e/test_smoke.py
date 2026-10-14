@@ -10,6 +10,7 @@ SEITEN = [
     ("/suppliers", "Lieferanten"),
     ("/stock", "Lager"),
     ("/stock-counts", "Inventur"),
+    ("/purchase-orders", "Bestellungen"),
     ("/quotes", "Angebote"),
     ("/workshop-orders", "Werkstatt"),
     ("/maintenance-plans", "Wartungspl"),
@@ -36,5 +37,5 @@ def test_seite_laedt(page, base_url, pfad, titel):
 def test_navigation_enthaelt_neue_bereiche(page, base_url):
     page.goto(base_url)
     nav = page.locator("nav").inner_text()
-    for eintrag in ("Angebote", "Inventur", "Hilfe"):
+    for eintrag in ("Angebote", "Bestellungen", "Inventur", "Hilfe"):
         assert eintrag in nav

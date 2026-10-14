@@ -67,6 +67,9 @@ class Article(BaseModel):
     )
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     minimum_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Bestellwesen: Zielbestand (auffüllen bis) und Bestellnummer beim Lieferanten
+    target_stock: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    supplier_article_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(255), nullable=True)
     qr_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     oem_number: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -19,6 +19,7 @@ class SupplierCreate(BaseModel):
     postal_code: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = "Deutschland"
+    customer_number: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -34,6 +35,7 @@ class SupplierUpdate(BaseModel):
     postal_code: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    customer_number: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -50,6 +52,7 @@ class SupplierRead(BaseModel):
     postal_code: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    customer_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
 

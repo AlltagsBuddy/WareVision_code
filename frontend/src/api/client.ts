@@ -765,6 +765,53 @@ export const quotesApi = {
   },
 }
 
+export interface PurchaseOrderPayload {
+  supplier_id: string
+  order_date: string
+  expected_date?: string | null
+  notes?: string | null
+  internal_notes?: string | null
+  items: {
+    article_id?: string | null
+    description: string
+    supplier_article_number?: string | null
+    quantity: number
+    unit?: string | null
+    unit_price: number
+    vat_rate: number
+  }[]
+}
+
+export const purchaseOrdersApi = {
+  list: (params?: { supplier_id?: string; status_filter?: string; open_only?: boolean }) => {
+    const p = new URLSearchParams()
+    if (params?.supplier_id) p.set('supplier_id', params.supplier_id)
+    if (params?.status_filter) p.set('status_filter', params.status_filter)
+    if (params?.open_only) p.set('open_only', 'true')
+    return api<any[]>('/purchase-orders?' + p)
+  },
+  suggestions: () => api<any[]>('/purchase-orders/suggestions'),
+  get: (id: string) => api<any>(`/purchase-orders/${id}`),
+  create: (data: PurchaseOrderPayload) => api<any>('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: PurchaseOrderPayload) =>
+    api<any>(`/purchase-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => api<void>(`/purchase-orders/${id}`, { method: 'DELETE' }),
+  markSent: (id: string) => api<any>(`/purchase-orders/${id}/mark-sent`, { method: 'POST' }),
+  sendEmail: (id: string, recipientEmail?: string) =>
+    api<any>(`/purchase-orders/${id}/send-email`, { method: 'POST', body: JSON.stringify({ recipient_email: recipientEmail || null }) }),
+  receive: (id: string, data: { lines: { item_id: string; quantity: number }[]; delivery_note?: string | null; update_purchase_price?: boolean }) =>
+    api<any>(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
+  cancel: (id: string) => api<any>(`/purchase-orders/${id}/cancel`, { method: 'POST' }),
+  getPdf: async (id: string): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch(`${API_BASE}/purchase-orders/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('PDF konnte nicht geladen werden')
+    return res.blob()
+  },
+}
+
 export const stockCountsApi = {
   list: () => api<any[]>('/stock-counts'),
   get: (id: string) => api<any>(`/stock-counts/${id}`),

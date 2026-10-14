@@ -9,6 +9,7 @@ const MODULES = [
   { key: 'suppliers', label: 'Lieferanten' },
   { key: 'stock', label: 'Lager' },
   { key: 'stock_counts', label: 'Inventur' },
+  { key: 'purchase_orders', label: 'Bestellungen' },
   { key: 'quotes', label: 'Angebote' },
   { key: 'workshop_orders', label: 'Werkstattauftraege' },
   { key: 'maintenance_plans', label: 'Wartungsplaene' },

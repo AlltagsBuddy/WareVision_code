@@ -11,6 +11,7 @@ const EMPTY_FORM = {
   postal_code: '',
   city: '',
   country: 'Deutschland',
+  customer_number: '',
   notes: '',
 }
 
@@ -58,6 +59,7 @@ export default function Suppliers() {
       postal_code: s.postal_code || '',
       city: s.city || '',
       country: s.country || 'Deutschland',
+      customer_number: s.customer_number || '',
       notes: s.notes || '',
     })
     setError('')
@@ -79,6 +81,7 @@ export default function Suppliers() {
         postal_code: form.postal_code || undefined,
         city: form.city || undefined,
         country: form.country || undefined,
+        customer_number: form.customer_number.trim() || null,
         notes: form.notes || undefined,
       }
       if (editing) {
@@ -190,6 +193,10 @@ export default function Suppliers() {
                   <label>Land</label>
                   <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
                 </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="sup-customer-no">Unsere Kundennummer beim Lieferanten</label>
+                <input id="sup-customer-no" maxLength={100} value={form.customer_number} onChange={(e) => setForm({ ...form, customer_number: e.target.value })} placeholder="steht auf der Bestellung" />
               </div>
               <div className="form-group">
                 <label>Notizen</label>

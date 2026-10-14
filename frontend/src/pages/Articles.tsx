@@ -32,6 +32,8 @@ export default function Articles() {
     sales_price_b2b: 0,
     vat_rate: 19,
     minimum_stock: 0,
+    target_stock: '' as string,
+    supplier_article_number: '',
     barcode: '',
     compatible_model_ids: [] as string[],
   })
@@ -119,6 +121,8 @@ export default function Articles() {
       sales_price_b2b: 0,
       vat_rate: 19,
       minimum_stock: 0,
+      target_stock: '',
+      supplier_article_number: '',
       barcode: '',
       compatible_model_ids: [],
     })
@@ -129,6 +133,10 @@ export default function Articles() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (form.target_stock !== '' && (!/^\d+$/.test(form.target_stock) || parseInt(form.target_stock, 10) < form.minimum_stock)) {
+      setError('Der Zielbestand muss eine ganze Zahl und mindestens so groß wie der Mindestbestand sein.')
+      return
+    }
     setSubmitting(true)
     try {
       if (editing) {
@@ -143,6 +151,8 @@ export default function Articles() {
           sales_price_b2b: form.sales_price_b2b,
           vat_rate: form.vat_rate,
           minimum_stock: form.minimum_stock,
+          target_stock: form.target_stock === '' ? null : parseInt(form.target_stock, 10),
+          supplier_article_number: form.supplier_article_number.trim() || null,
           barcode: form.barcode || undefined,
           compatible_model_ids: form.compatible_model_ids,
         }
@@ -162,6 +172,8 @@ export default function Articles() {
           sales_price_b2b: form.sales_price_b2b,
           vat_rate: form.vat_rate,
           minimum_stock: form.minimum_stock,
+          target_stock: form.target_stock === '' ? null : parseInt(form.target_stock, 10),
+          supplier_article_number: form.supplier_article_number.trim() || null,
           barcode: form.barcode || undefined,
           compatible_model_ids: form.compatible_model_ids,
         }
@@ -207,6 +219,8 @@ export default function Articles() {
       sales_price_b2b: Number(a.sales_price_b2b),
       vat_rate: Number(a.vat_rate),
       minimum_stock: a.minimum_stock,
+      target_stock: a.target_stock != null ? String(a.target_stock) : '',
+      supplier_article_number: a.supplier_article_number || '',
       barcode: a.barcode || '',
       compatible_model_ids: (a.compatible_model_ids || []).map((id: any) => String(id)),
     })
@@ -448,6 +462,14 @@ export default function Articles() {
                   <label>Mindestbestand</label>
                   <input type="number" value={form.minimum_stock} onChange={(e) => setForm({ ...form, minimum_stock: parseInt(e.target.value, 10) || 0 })} min="0" />
                 </div>
+                <div className="form-group">
+                  <label htmlFor="art-target">Zielbestand (Bestellvorschlag)</label>
+                  <input id="art-target" type="number" min="0" placeholder="leer = Mindestbestand" value={form.target_stock} onChange={(e) => setForm({ ...form, target_stock: e.target.value })} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="art-supplier-no">Artikelnummer beim Lieferanten</label>
+                <input id="art-supplier-no" maxLength={100} value={form.supplier_article_number} onChange={(e) => setForm({ ...form, supplier_article_number: e.target.value })} placeholder="steht auf der Bestellung" />
               </div>
               {/* Kompatible Fahrzeugmodelle */}
               {allModels.length > 0 && (

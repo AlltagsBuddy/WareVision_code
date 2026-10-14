@@ -28,6 +28,7 @@ from app.api.v1 import (
     quotes,
     stock_counts,
     help,
+    purchase_orders,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -57,3 +58,4 @@ api_router.include_router(labor_rates.router)
 api_router.include_router(quotes.router)
 api_router.include_router(stock_counts.router)
 api_router.include_router(help.router)
+api_router.include_router(purchase_orders.router)
