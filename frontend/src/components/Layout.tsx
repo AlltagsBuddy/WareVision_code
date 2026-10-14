@@ -19,6 +19,28 @@ interface NavGroup {
 const isActivePath = (current: string, path: string) =>
   path === '/' ? current === '/' : current === path || current.startsWith(path + '/')
 
+const COLLAPSE_KEY = 'warevision.nav.collapsed'
+const isSmallScreen = () => typeof window !== 'undefined' && window.innerWidth <= 900
+
+/** Gespeicherte zugeklappte Gruppen lesen (null = noch nie gespeichert) */
+function loadCollapsed(): string[] | null {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : null
+  } catch {
+    return null
+  }
+}
+
+function saveCollapsed(titles: string[]) {
+  try {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify(titles))
+  } catch {
+    /* Speichern nicht möglich (z. B. privater Modus) – Menü funktioniert trotzdem */
+  }
+}
+
 export default function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
@@ -85,6 +107,24 @@ export default function Layout() {
     .map((g) => ({ ...g, items: g.items.filter((i) => i.show) }))
     .filter((g) => g.items.length > 0)
 
+  const activeGroup = groups.find((g) => g.title && g.items.some((i) => isActivePath(location.pathname, i.path)))?.title
+
+  // Zugeklappte Gruppen: gespeicherte Wahl. Ohne gespeicherte Wahl: PC = alles offen,
+  // Handy = nur die Gruppe der aktuellen Seite offen (wird bei jedem Seitenwechsel neu bestimmt).
+  const [savedCollapsed, setSavedCollapsed] = useState<string[] | null>(() => loadCollapsed())
+  const defaultCollapsed = () =>
+    isSmallScreen() ? groups.filter((g) => g.title && g.title !== activeGroup).map((g) => g.title as string) : []
+  const collapsed = savedCollapsed ?? defaultCollapsed()
+
+  const toggleGroup = (title: string) => {
+    const next = collapsed.includes(title) ? collapsed.filter((t) => t !== title) : [...collapsed, title]
+    saveCollapsed(next)
+    setSavedCollapsed(next)
+  }
+
+  // Die Gruppe der aktuellen Seite ist immer offen
+  const isOpen = (title?: string) => !title || title === activeGroup || !collapsed.includes(title)
+
   // Menüs bei Seitenwechsel schließen
   useEffect(() => {
     setNavOpen(false)
@@ -142,12 +182,29 @@ export default function Layout() {
           <Logo size="header" />
         </Link>
         <nav className="sidebar-nav">
-          {groups.map((g, i) => (
-            <div key={g.title ?? i} className="side-group">
-              {g.title && <div className="side-group-title">{g.title}</div>}
-              {g.items.map(link)}
-            </div>
-          ))}
+          {groups.map((g, i) => {
+            const open = isOpen(g.title)
+            const id = `nav-group-${i}`
+            return (
+              <div key={g.title ?? i} className="side-group">
+                {g.title && (
+                  <button
+                    type="button"
+                    className="side-group-title"
+                    aria-expanded={open}
+                    aria-controls={id}
+                    disabled={g.title === activeGroup}
+                    title={g.title === activeGroup ? 'Aktueller Bereich' : open ? 'Zuklappen' : 'Aufklappen'}
+                    onClick={() => toggleGroup(g.title as string)}
+                  >
+                    <span>{g.title}</span>
+                    <span className="side-group-chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                  </button>
+                )}
+                {open && <div id={id}>{g.items.map(link)}</div>}
+              </div>
+            )
+          })}
         </nav>
         <div className="sidebar-footer">
           {link({ path: '/help', label: '? Hilfe', show: true })}

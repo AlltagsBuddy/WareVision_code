@@ -38,7 +38,7 @@
 }
 
 .side-group {
-  margin-top: 0.9rem;
+  margin-top: 0.5rem;
 }
 
 .side-group:first-child {
@@ -46,13 +46,39 @@
 }
 
 .side-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  opacity: 0.75;
-  padding: 0 0.65rem 0.3rem;
+  padding: 0.35rem 0.65rem;
+  text-align: left;
+}
+
+.side-group-title:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgba(56, 189, 248, 0.07);
+}
+
+.side-group-title:disabled {
+  cursor: default;
+  color: var(--color-text-muted);
+}
+
+.side-group-chevron {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.side-group-title:disabled .side-group-chevron {
+  opacity: 0.35;
 }
 
 .side-link {

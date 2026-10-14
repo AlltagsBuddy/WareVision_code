@@ -7,7 +7,7 @@ Es gibt drei Ebenen von Tests:
 | Ebene | Ort | Werkzeug | Anzahl (Stand) |
 |---|---|---|---|
 | Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 358 |
-| Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 89 |
+| Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 94 |
 | Ende-zu-Ende im Browser | `e2e/` | pytest + Playwright | 29 |
 
 ---

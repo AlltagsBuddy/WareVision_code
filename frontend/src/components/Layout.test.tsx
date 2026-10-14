@@ -17,6 +17,8 @@ const sidebar = () => screen.getByRole('complementary', { name: 'Hauptmenü' })
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
+  window.innerWidth = 1280
   user = { first_name: 'Annett', last_name: 'Schoner', email: 'a@test.de', role_name: 'admin', permissions: null }
 })
 
@@ -52,6 +54,55 @@ describe('Seitenleiste', () => {
     expect(within(nav).queryByText('Rechnungen')).not.toBeInTheDocument()
     expect(within(nav).queryByText('Finanzen')).not.toBeInTheDocument()  // leere Gruppe ausgeblendet
     expect(within(nav).getByText('Kunden', { selector: 'a' })).toBeInTheDocument()
+  })
+})
+
+describe('Zuklappbare Gruppen', () => {
+  const groupButton = (name: string) => within(sidebar()).getByRole('button', { name: new RegExp(name) })
+
+  it('PC: alles offen, Gruppe lässt sich zu- und aufklappen und wird gemerkt', () => {
+    const { unmount } = renderAt('/')
+    expect(within(sidebar()).getByText('Bestellungen')).toBeInTheDocument()
+    fireEvent.click(groupButton('Lager & Einkauf'))
+    expect(within(sidebar()).queryByText('Bestellungen')).not.toBeInTheDocument()
+    expect(groupButton('Lager & Einkauf')).toHaveAttribute('aria-expanded', 'false')
+    unmount()
+    renderAt('/')                                     // neu laden: Einstellung bleibt
+    expect(within(sidebar()).queryByText('Bestellungen')).not.toBeInTheDocument()
+    fireEvent.click(groupButton('Lager & Einkauf'))
+    expect(within(sidebar()).getByText('Bestellungen')).toBeInTheDocument()
+  })
+
+  it('Handy: nur die Gruppe der aktuellen Seite ist offen', () => {
+    window.innerWidth = 390
+    renderAt('/invoices')
+    expect(within(sidebar()).getByText('Rechnungen')).toBeInTheDocument()
+    expect(within(sidebar()).queryByText('Bestellungen')).not.toBeInTheDocument()
+    expect(within(sidebar()).queryByText('Terminplaner')).not.toBeInTheDocument()
+    expect(within(sidebar()).getByText('Dashboard')).toBeInTheDocument()   // ohne Gruppe immer sichtbar
+  })
+
+  it('Handy: Gruppen, die erst nach dem Laden des Benutzers erscheinen, sind ebenfalls zu', () => {
+    window.innerWidth = 390
+    user = null
+    const ui = renderAt('/invoices')
+    user = { first_name: 'Annett', last_name: 'Schoner', email: 'a@test.de', role_name: 'admin', permissions: null }
+    ui.rerender(<MemoryRouter initialEntries={['/invoices']}><Layout /></MemoryRouter>)
+    expect(within(sidebar()).getByRole('button', { name: /Verwaltung/ })).toHaveAttribute('aria-expanded', 'false')
+    expect(within(sidebar()).queryByText('Benutzer')).not.toBeInTheDocument()
+  })
+
+  it('aktuelle Gruppe bleibt offen, auch wenn sie gespeichert zugeklappt war', () => {
+    localStorage.setItem('warevision.nav.collapsed', JSON.stringify(['Finanzen']))
+    renderAt('/invoices')
+    expect(within(sidebar()).getByText('Rechnungen')).toBeInTheDocument()
+    expect(groupButton('Finanzen')).toBeDisabled()
+  })
+
+  it('kaputter Speicherinhalt stört nicht', () => {
+    localStorage.setItem('warevision.nav.collapsed', '{kaputt')
+    renderAt('/')
+    expect(within(sidebar()).getByText('Bestellungen')).toBeInTheDocument()
   })
 })
 

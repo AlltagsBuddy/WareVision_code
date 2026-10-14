@@ -68,6 +68,8 @@ def test_mobil_menue(page, base_url):
     page.goto(base_url)
     assert not page.locator("aside.sidebar >> text=Rechnungen").is_visible() or page.locator(".nav-toggle").is_visible()
     page.click(".nav-toggle")
+    assert not page.locator("aside.sidebar >> text=Rechnungen").is_visible()   # Gruppen auf dem Handy zugeklappt
+    page.click("aside.sidebar >> button:has-text('Finanzen')")
     page.click("aside.sidebar >> text=Rechnungen")
     page.wait_for_url("**/invoices")
     page.wait_for_timeout(300)
