@@ -32,6 +32,25 @@ def test_foto_am_auftrag(page, base_url, tmp_path):
     assert not page.js_errors
 
 
+def test_foto_mit_kamera(page, base_url):
+    """Webcam/Handykamera im Browser (hier: simulierte Kamera von Chromium)."""
+    if not base_url.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+        return  # Kamera im Browser nur über https oder localhost
+    page.goto(f"{base_url}/workshop-orders")
+    page.wait_for_selector("tbody tr")
+    page.locator("tbody tr").first.click()
+    page.wait_for_selector("text=Foto aufnehmen")
+    before = page.locator(".order-photo-thumb").count()
+    page.click("text=Foto aufnehmen")
+    page.wait_for_selector("button:has-text('Auslösen'):not([disabled])", timeout=10000)
+    page.click("button:has-text('Auslösen')")
+    page.wait_for_function(f"document.querySelectorAll('.order-photo-thumb img').length > {before}")
+    page.locator(".order-photo-thumb").last.click()
+    page.click("text=Foto entfernen")
+    page.wait_for_function(f"document.querySelectorAll('.order-photo-thumb').length === {before}")
+    assert not page.js_errors
+
+
 def test_wartungsplan_mit_baujahr(page, base_url):
     page.goto(f"{base_url}/maintenance-plans")
     page.click("text=+ Neuer Wartungsplan")

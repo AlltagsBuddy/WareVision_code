@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { workshopOrdersApi } from '../api/client'
+import CameraCapture, { cameraSupported } from './CameraCapture'
 
 type Photo = { id: string; filename: string; caption?: string | null; created_at: string }
 
@@ -18,6 +19,7 @@ export default function OrderPhotos({ orderId }: { orderId: string }) {
   const urlsRef = useRef<Record<string, string>>({})
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [cameraOpen, setCameraOpen] = useState(false)
 
   const loadThumb = async (photo: Photo) => {
     if (urlsRef.current[photo.id]) return
@@ -51,7 +53,7 @@ export default function OrderPhotos({ orderId }: { orderId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId])
 
-  const handleFiles = async (files: FileList | null) => {
+  const handleFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return
     setError('')
     setUploading(true)
@@ -69,6 +71,13 @@ export default function OrderPhotos({ orderId }: { orderId: string }) {
     setUploading(false)
     if (cameraRef.current) cameraRef.current.value = ''
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // Kamera direkt im Browser (auch Notebook-Webcam). Ohne sichere Verbindung (z. B. http über die
+  // IP-Adresse vom Handy) erlaubt der Browser das nicht – dann öffnet das Handy seine Kamera-App.
+  const startCamera = () => {
+    if (cameraSupported()) setCameraOpen(true)
+    else cameraRef.current?.click()
   }
 
   const openPreview = (photo: Photo) => {
@@ -107,7 +116,7 @@ export default function OrderPhotos({ orderId }: { orderId: string }) {
     <section className="order-photos" aria-label="Fotos zum Auftrag">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0 }}>Fotos{photos.length > 0 ? ` (${photos.length})` : ''}</h3>
-        <button type="button" className="btn-secondary btn-sm" disabled={uploading} onClick={() => cameraRef.current?.click()}>
+        <button type="button" className="btn-secondary btn-sm" disabled={uploading} onClick={startCamera}>
           Foto aufnehmen
         </button>
         <button type="button" className="btn-secondary btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
@@ -120,6 +129,15 @@ export default function OrderPhotos({ orderId }: { orderId: string }) {
           data-testid="photo-file-input" onChange={(e) => handleFiles(e.target.files)} />
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+      {cameraOpen && (
+        <CameraCapture
+          onClose={() => setCameraOpen(false)}
+          onCapture={(file) => {
+            setCameraOpen(false)
+            handleFiles([file])
+          }}
+        />
+      )}
       {loading ? (
         <p style={{ fontSize: '0.85rem' }}>Fotos laden…</p>
       ) : photos.length === 0 ? (

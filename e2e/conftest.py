@@ -31,7 +31,8 @@ def pytest_collection_modifyitems(config, items):
 def browser():
     sync_api = pytest.importorskip("playwright.sync_api")
     with sync_api.sync_playwright() as p:
-        b = p.chromium.launch()
+        # Simulierte Kamera (Testbild) für die Foto-Aufnahme – es wird keine echte Kamera benutzt
+        b = p.chromium.launch(args=["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"])
         yield b
         b.close()
 
@@ -54,7 +55,8 @@ def auth_state(browser):
 @pytest.fixture()
 def page(browser, auth_state):
     """Angemeldete Browserseite; sammelt JavaScript-Fehler in page.js_errors."""
-    context = browser.new_context(viewport={"width": 1400, "height": 1000}, locale="de-DE", storage_state=auth_state)
+    context = browser.new_context(viewport={"width": 1400, "height": 1000}, locale="de-DE", storage_state=auth_state,
+                                  permissions=["camera"])
     pg = context.new_page()
     pg.js_errors = []
     pg.on("pageerror", lambda e: pg.js_errors.append(str(e)))
