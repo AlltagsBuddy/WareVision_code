@@ -20,6 +20,7 @@ from app.models.user import User
 from app.schemas.incoming_invoice import IncomingInvoiceCreate, IncomingInvoiceRead, IncomingInvoiceUpdate
 from app.services.audit import log_audit
 from app.services.einvoice_import import EInvoiceError, FORMAT_ZUGFERD, parse_einvoice
+from app.services.supplier_catalog import add_invoice_items
 
 router = APIRouter(prefix="/incoming-invoices", tags=["incoming-invoices"], dependencies=[Depends(require_right("accounting"))])
 
@@ -203,6 +204,8 @@ async def import_einvoice(
                 "sha256": sha256,
             },
         )
+        if not data["is_credit_note"]:
+            _positions_to_catalog(db, data.get("items") or [], inv)
         db.commit()
     except Exception:
         db.rollback()
@@ -210,6 +213,49 @@ async def import_einvoice(
         raise
     db.refresh(inv)
     return inv
+
+
+def _positions_to_catalog(db: Session, items: list[dict], inv: IncomingInvoice):
+    """Rechnungspositionen mit Barcode oder Bestellnummer als Artikel-Vorschläge merken.
+    Fehler hier dürfen den Rechnungsimport nicht verhindern."""
+    from app.models.supplier import Supplier
+
+    try:
+        with db.begin_nested():
+            supplier = db.query(Supplier).filter(Supplier.name.ilike(inv.supplier_name)).first()
+            return add_invoice_items(db, items, inv.supplier_name, supplier.id if supplier else None,
+                                     inv.invoice_number)
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("Positionen konnten nicht übernommen werden")
+        return None
+
+
+@router.post("/{invoice_id}/positions-to-catalog")
+def positions_to_catalog(
+    invoice_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
+) -> dict:
+    """Positionen einer bereits importierten E-Rechnung als Artikel-Vorschläge übernehmen."""
+    inv = db.query(IncomingInvoice).filter(IncomingInvoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Eingangsrechnung nicht gefunden")
+    if not inv.original_path or not Path(inv.original_path).is_file():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Nur bei importierten E-Rechnungen möglich (ZUGFeRD/XRechnung).")
+    try:
+        data = parse_einvoice(Path(inv.original_path).read_bytes())
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Die E-Rechnung konnte nicht gelesen werden.") from exc
+    res = _positions_to_catalog(db, data.get("items") or [], inv)
+    if res is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Positionen konnten nicht übernommen werden.")
+    db.commit()
+    return {"created": res.created, "updated": res.updated, "skipped": res.skipped}
 
 
 @router.get("/{invoice_id}", response_model=IncomingInvoiceRead)

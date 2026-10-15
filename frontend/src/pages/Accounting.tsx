@@ -290,6 +290,21 @@ export default function Accounting() {
     }
   }
 
+  const handlePositionsToCatalog = async (inv: any) => {
+    setEInvoiceMessage(null)
+    try {
+      const r = await incomingInvoicesApi.positionsToCatalog(inv.id)
+      setEInvoiceMessage({
+        type: 'success',
+        text: `Artikeldaten aus ${inv.invoice_number}: ${r.created} neu, ${r.updated} aktualisiert`
+          + (r.skipped ? `, ${r.skipped} Position(en) ohne Barcode/Bestellnummer übersprungen` : '')
+          + '. Beim Anlegen eines Artikels per Barcode werden diese Angaben vorgeschlagen.',
+      })
+    } catch (err) {
+      setEInvoiceMessage({ type: 'error', text: err instanceof Error ? err.message : 'Fehler' })
+    }
+  }
+
   const handleDownloadOriginal = async (inv: any) => {
     try {
       const blob = await incomingInvoicesApi.downloadOriginal(inv.id)
@@ -669,9 +684,17 @@ export default function Accounting() {
                               </button>
                             )}
                             {inv.einvoice_format ? (
-                              <button type="button" className="btn-secondary btn-sm" onClick={() => handleDownloadOriginal(inv)} title="Unverändertes Original herunterladen (GoBD-Archiv)">
-                                Original
-                              </button>
+                              <>
+                                <button type="button" className="btn-secondary btn-sm" onClick={() => handleDownloadOriginal(inv)} title="Unverändertes Original herunterladen (GoBD-Archiv)">
+                                  Original
+                                </button>
+                                {!inv.is_credit_note && (
+                                  <button type="button" className="btn-secondary btn-sm" onClick={() => handlePositionsToCatalog(inv)}
+                                    title="Positionen mit Barcode oder Bestellnummer als Vorschläge für neue Artikel übernehmen">
+                                    → Artikeldaten
+                                  </button>
+                                )}
+                              </>
                             ) : (
                               <>
                                 <button type="button" className="btn-secondary btn-sm" onClick={() => handleEditIncoming(inv)}>

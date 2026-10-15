@@ -27,6 +27,7 @@ from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.datev import DatevAccount
 from app.models.archived_document import ArchivedDocument
 from app.models.workshop_order_photo import WorkshopOrderPhoto
+from app.models.supplier_catalog import SupplierCatalogItem
 
 __all__ = [
     "BaseModel",
@@ -64,4 +65,5 @@ __all__ = [
     "DatevAccount",
     "ArchivedDocument",
     "WorkshopOrderPhoto",
+    "SupplierCatalogItem",
 ]

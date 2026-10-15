@@ -9,6 +9,9 @@ Eingangsrechnungen sind Rechnungen, die die Werkstatt erhält (z. B. für Teile,
 ## E-Rechnung importieren
 „↑ E-Rechnung importieren“ liest ZUGFeRD-PDFs und XRechnungen (XML, UBL oder CII) ein und legt automatisch eine Eingangsrechnung an. Das Original wird unverändert archiviert (Prüfsumme) und ist über „Original“ abrufbar. Importierte E-Rechnungen können nicht gelöscht werden; änderbar sind nur Status, Kategorie und Notizen. Dieselbe Rechnung kann nicht zweimal importiert werden. Eine normale PDF ohne eingebettete XML ist keine E-Rechnung und wird abgelehnt – dann manuell erfassen.
 
+## E-Rechnung: Positionen als Artikeldaten
+Beim Import einer Lieferanten-E-Rechnung merkt sich WareVision Positionen mit Barcode (GTIN) oder Bestellnummer als Vorschläge für neue Artikel (siehe Artikel → „Artikel schnell anlegen“). Bei früher importierten E-Rechnungen übernimmt „→ Artikeldaten“ die Positionen nachträglich. Gutschriften werden nicht übernommen.
+
 ## Steuerberater-Export
 „ZIP-Paket herunterladen“ erstellt für den gewählten Zeitraum ein Paket mit Ausgangsrechnungen (PDF, getrennt nach Privat/Händler), Eingangsrechnungen, CSV-Listen, einer USt-Zusammenfassung nach Monat, Typ und Steuersatz sowie einer LIESMICH-Datei.
 

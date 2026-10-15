@@ -613,6 +613,81 @@ export const archiveApi = {
   verify: () => api<any>('/archive/verify'),
 }
 
+/** Lieferanten-Artikeldaten: Vorschläge beim Anlegen von Artikeln */
+export type CatalogItem = {
+  id: string
+  supplier_id: string | null
+  supplier_name: string
+  source: 'import' | 'einvoice'
+  source_ref: string | null
+  barcode: string | null
+  supplier_article_number: string | null
+  name: string
+  description: string | null
+  manufacturer: string | null
+  manufacturer_part_number: string | null
+  purchase_price: number | null
+  retail_price_net: number | null
+  vat_rate: number | null
+  unit: string | null
+  updated_at: string | null
+}
+
+export type LabelSuggestion = {
+  name: string | null
+  manufacturer: string | null
+  manufacturer_part_number: string | null
+  barcode: string | null
+  description: string | null
+}
+
+async function uploadForm<T>(path: string, form: FormData, fallback: string): Promise<T> {
+  const token = getToken()
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    if (res.status === 413) throw new Error('Die Datei ist zu groß.')
+    throw new Error(typeof err.detail === 'string' ? err.detail : fallback)
+  }
+  return res.json()
+}
+
+export const catalogApi = {
+  lookup: (barcode: string) => api<CatalogItem[]>(`/article-catalog/lookup?barcode=${encodeURIComponent(barcode)}`),
+  search: (q: string) => api<CatalogItem[]>(`/article-catalog/search?q=${encodeURIComponent(q)}`),
+  sources: () => api<{ supplier_name: string; source: string; count: number; updated_at: string | null }[]>('/article-catalog/sources'),
+  remove: (supplierName: string) =>
+    api<{ deleted: number }>(`/article-catalog?supplier_name=${encodeURIComponent(supplierName)}`, { method: 'DELETE' }),
+  preview: (file: File) => {
+    const f = new FormData()
+    f.append('file', file)
+    return uploadForm<{
+      headers: string[]; sample: string[][]; row_count: number
+      mapping: Record<string, number | null>; fields: { key: string; label: string }[]
+    }>('/article-catalog/import/preview', f, 'Datei konnte nicht gelesen werden')
+  },
+  importFile: (file: File, mapping: Record<string, number | null>, supplier: { id?: string; name?: string }) => {
+    const f = new FormData()
+    f.append('file', file)
+    f.append('mapping', JSON.stringify(mapping))
+    if (supplier.id) f.append('supplier_id', supplier.id)
+    if (supplier.name) f.append('supplier_name', supplier.name)
+    return uploadForm<{ supplier_name: string; created: number; updated: number; skipped: number }>(
+      '/article-catalog/import', f, 'Import fehlgeschlagen')
+  },
+  labelStatus: () => api<{ enabled: boolean }>('/article-catalog/recognize-label/status'),
+  recognizeLabel: (file: File) => {
+    const f = new FormData()
+    f.append('file', file)
+    return uploadForm<{ suggestion: LabelSuggestion; catalog: CatalogItem[] }>(
+      '/article-catalog/recognize-label', f, 'Etikett konnte nicht gelesen werden')
+  },
+}
+
 export const incomingInvoicesApi = {
   list: (params?: { date_from?: string; date_to?: string; status_filter?: string; search?: string; skip?: number; limit?: number }) => {
     const p = new URLSearchParams()
@@ -680,6 +755,9 @@ export const incomingInvoicesApi = {
     }
     return res.json()
   },
+  /** Positionen (mit Barcode/Bestellnummer) als Artikel-Vorschläge übernehmen */
+  positionsToCatalog: (id: string) =>
+    api<{ created: number; updated: number; skipped: number }>(`/incoming-invoices/${id}/positions-to-catalog`, { method: 'POST' }),
   /** Unverändertes Original der E-Rechnung herunterladen */
   downloadOriginal: async (id: string): Promise<Blob> => {
     const token = getToken()

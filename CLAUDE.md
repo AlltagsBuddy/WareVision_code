@@ -85,6 +85,7 @@ WareVision_code/
 | Suche in Terminen, Benutzern, Audit-Log und Buchhaltung | ✅ | ✅ |
 | Zwei-Faktor-Anmeldung (TOTP, Wiederherstellungscodes, Admin-Reset; Pflicht auf dem Server) | ✅ | ✅ |
 | Rollen & Rechte (Admin, Chef/Chefin, Büro, Werkstatt, Mitarbeiter; Bereiche sehen/ändern, Sonderrechte; serverseitig in `core/permissions.py` + `module_guard`) | ✅ | ✅ |
+| Lieferanten-Artikeldaten (CSV/Excel-Import, E-Rechnungs-Positionen) und Etikett-Foto mit KI als Vorschlag beim Anlegen per Barcode (`services/supplier_catalog.py`, `label_recognition.py`) | ✅ | ✅ |
 | Server-Betrieb Hetzner (docker-compose.prod.yml, https/Caddy, Härtung, PWA) – docs/ANLEITUNG_SERVER.md | ✅ | ✅ |
 | Storno → Auftrag korrigieren → neue Rechnung (Verweis Rechnungsposition ON DELETE SET NULL) | ✅ | ✅ |
 | Dokumentenmanagement | ✅ | ✅ |

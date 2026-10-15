@@ -323,6 +323,10 @@ def _parse_zugferd_xml(xml_str: str) -> dict:
 
             product = line.find("ram:SpecifiedTradeProduct", ns)
             name = text(product, "ram:Name")
+            # BT-157 Artikelkennung (z. B. GTIN, schemeID 0160), BT-155 Artikelnummer des Verkäufers
+            global_id = text(product, "ram:GlobalID")
+            seller_article_number = text(product, "ram:SellerAssignedID")
+            brand = text(product, "ram:BrandName")
 
             delivery = line.find("ram:SpecifiedLineTradeDelivery", ns)
             billed_qty_el = delivery.find("ram:BilledQuantity", ns) if delivery is not None else None
@@ -344,6 +348,9 @@ def _parse_zugferd_xml(xml_str: str) -> dict:
                 "unit_price": unit_price,
                 "vat_rate": vat_rate,
                 "line_total_net": line_total,
+                "global_id": global_id,
+                "seller_article_number": seller_article_number,
+                "brand": brand,
             })
 
     return {

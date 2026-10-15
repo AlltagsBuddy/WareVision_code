@@ -1,9 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { articlesApi, articleCategoriesApi, suppliersApi, manufacturersApi, storageLocationsApi } from '../api/client'
+import { articlesApi, articleCategoriesApi, suppliersApi, manufacturersApi, storageLocationsApi, catalogApi, type CatalogItem, type LabelSuggestion } from '../api/client'
 import BarcodeScanner from '../components/BarcodeScanner'
+import CameraCapture, { cameraSupported } from '../components/CameraCapture'
+import CatalogImport from '../components/CatalogImport'
+import { useAuth } from '../hooks/useAuth'
+import { hasRight } from '../utils/permissions'
 
 export default function Articles() {
+  const { user } = useAuth()
   const [articles, setArticles] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
@@ -50,9 +55,21 @@ export default function Articles() {
     target_stock: '' as string,
     supplier_article_number: '',
     part_manufacturer: '',
+    oem_number: '',
     barcode: '',
     compatible_model_ids: [] as string[],
   })
+  // Vorschläge aus Lieferanten-Artikeldaten bzw. Etikett-Foto (nur beim Anlegen)
+  const [catalogHits, setCatalogHits] = useState<CatalogItem[]>([])
+  const [prefillNote, setPrefillNote] = useState('')
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogSearchHits, setCatalogSearchHits] = useState<CatalogItem[]>([])
+  const [showCatalogImport, setShowCatalogImport] = useState(false)
+  const [aiEnabled, setAiEnabled] = useState(false)
+  const [labelCameraOpen, setLabelCameraOpen] = useState(false)
+  const [labelBusy, setLabelBusy] = useState(false)
+  const [labelError, setLabelError] = useState('')
+  const labelFileRef = useRef<HTMLInputElement>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -76,6 +93,7 @@ export default function Articles() {
   useEffect(() => {
     loadCategories()
     loadStorageLocations()
+    catalogApi.labelStatus().then((r) => setAiEnabled(r.enabled)).catch(() => setAiEnabled(false))
     suppliersApi.list().then(setSuppliers)
     // Alle Hersteller laden und danach für jeden die Modelle
     manufacturersApi.list().then(async (manfs) => {
@@ -144,10 +162,16 @@ export default function Articles() {
       target_stock: '',
       supplier_article_number: '',
       part_manufacturer: '',
+      oem_number: '',
       barcode: '',
       compatible_model_ids: [],
     })
     setEditing(null)
+    setCatalogHits([])
+    setPrefillNote('')
+    setCatalogQuery('')
+    setCatalogSearchHits([])
+    setLabelError('')
     setError('')
   }
 
@@ -175,6 +199,7 @@ export default function Articles() {
           target_stock: form.target_stock === '' ? null : parseInt(form.target_stock, 10),
           supplier_article_number: form.supplier_article_number.trim() || null,
           part_manufacturer: form.part_manufacturer.trim() || null,
+          oem_number: form.oem_number.trim() || null,
           barcode: form.barcode || undefined,
           compatible_model_ids: form.compatible_model_ids,
         }
@@ -197,6 +222,7 @@ export default function Articles() {
           target_stock: form.target_stock === '' ? null : parseInt(form.target_stock, 10),
           supplier_article_number: form.supplier_article_number.trim() || null,
           part_manufacturer: form.part_manufacturer.trim() || null,
+          oem_number: form.oem_number.trim() || null,
           barcode: form.barcode || undefined,
           compatible_model_ids: form.compatible_model_ids,
         }
@@ -228,6 +254,7 @@ export default function Articles() {
     if (scanTarget === 'form') {
       setForm((f) => ({ ...f, barcode: clean }))
       setScanModalOpen(false)
+      lookupRef.current(clean)
       return
     }
     setBarcodeFilter(clean)
@@ -275,6 +302,93 @@ export default function Articles() {
     resetForm()
     setForm((f) => ({ ...f, barcode: barcodeFilter }))
     setShowForm(true)
+    lookupRef.current(barcodeFilter)
+  }
+
+  /** Vorschlag übernehmen: nur leere Felder füllen – bereits Eingetragenes bleibt. */
+  const applyCatalog = (c: CatalogItem) => {
+    setForm((f) => ({
+      ...f,
+      barcode: f.barcode || c.barcode || '',
+      article_number: f.article_number || c.supplier_article_number || '',
+      name: f.name || c.name,
+      description: f.description || c.description || '',
+      part_manufacturer: f.part_manufacturer || c.manufacturer || '',
+      oem_number: f.oem_number || c.manufacturer_part_number || '',
+      supplier_article_number: f.supplier_article_number || c.supplier_article_number || '',
+      supplier_id: f.supplier_id || c.supplier_id || '',
+      purchase_price: f.purchase_price || c.purchase_price || 0,
+      sales_price_b2c: f.sales_price_b2c || c.retail_price_net || 0,
+      vat_rate: c.vat_rate != null && f.vat_rate === 19 ? c.vat_rate : f.vat_rate,
+    }))
+    const src = c.source === 'einvoice' ? `E-Rechnung ${c.source_ref || ''}`.trim() : `Artikeldatei ${c.source_ref || ''}`.trim()
+    setPrefillNote(`Vorgeschlagen aus Lieferantendaten „${c.supplier_name}“ (${src}). Bitte alle Angaben prüfen, `
+      + 'besonders Artikelnummer, Preise und MwSt.')
+  }
+
+  const applyLabel = (l: LabelSuggestion) => {
+    setForm((f) => ({
+      ...f,
+      barcode: f.barcode || l.barcode || '',
+      name: f.name || l.name || '',
+      description: f.description || l.description || '',
+      part_manufacturer: f.part_manufacturer || l.manufacturer || '',
+      oem_number: f.oem_number || l.manufacturer_part_number || '',
+    }))
+  }
+
+  /** Barcode im Formular → Lieferantendaten nachschlagen (nur beim Anlegen) */
+  const lookupCatalog = async (code: string) => {
+    const c = (code || '').replace(/\s+/g, '')
+    if (!c || editing) return
+    try {
+      const hits = await catalogApi.lookup(c)
+      setCatalogHits(hits)
+      if (hits.length >= 1) applyCatalog(hits[0])
+      else setPrefillNote('Zu diesem Barcode gibt es keine Lieferantendaten.'
+        + (aiEnabled ? ' Tipp: „Etikett fotografieren“ füllt Bezeichnung und Hersteller vor.' : ''))
+    } catch {
+      setCatalogHits([])
+    }
+  }
+  const lookupRef = useRef(lookupCatalog)
+  lookupRef.current = lookupCatalog
+
+  // Suche in den Lieferantendaten (für Artikel ohne Barcode)
+  useEffect(() => {
+    const q = catalogQuery.trim()
+    if (q.length < 2) {
+      setCatalogSearchHits([])
+      return
+    }
+    const t = setTimeout(() => {
+      catalogApi.search(q).then(setCatalogSearchHits).catch(() => setCatalogSearchHits([]))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [catalogQuery])
+
+  /** Etikett-Foto an die KI schicken; Vorschläge füllen leere Felder */
+  const recognizeLabel = async (file: File) => {
+    setLabelCameraOpen(false)
+    setLabelError('')
+    setLabelBusy(true)
+    try {
+      const r = await catalogApi.recognizeLabel(file)
+      if (r.catalog.length) {
+        setCatalogHits(r.catalog)
+        applyCatalog(r.catalog[0])
+      }
+      applyLabel(r.suggestion)
+      if (!r.catalog.length) {
+        setPrefillNote('Vorgeschlagen aus dem Etikett-Foto (KI). Bitte alle Angaben prüfen; Preise und Artikelnummer '
+          + 'stehen meist nicht auf dem Etikett.')
+      }
+    } catch (err) {
+      setLabelError(err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setLabelBusy(false)
+      if (labelFileRef.current) labelFileRef.current.value = ''
+    }
   }
 
   const openEdit = (a: any) => {
@@ -294,6 +408,7 @@ export default function Articles() {
       target_stock: a.target_stock != null ? String(a.target_stock) : '',
       supplier_article_number: a.supplier_article_number || '',
       part_manufacturer: a.part_manufacturer || '',
+      oem_number: a.oem_number || '',
       barcode: a.barcode || '',
       compatible_model_ids: (a.compatible_model_ids || []).map((id: any) => String(id)),
     })
@@ -471,6 +586,9 @@ export default function Articles() {
         <button type="button" onClick={() => { setScanTarget('filter'); setScanModalOpen(true) }} className="btn-secondary">
           Kamera scannen
         </button>
+        {hasRight(user, 'lager_einkauf') && (
+          <button type="button" onClick={() => setShowCatalogImport(true)} className="btn-secondary">Lieferantendaten</button>
+        )}
         <button type="button" onClick={openLocModal} className="btn-secondary">Lagerorte</button>
         <button type="button" onClick={openCatModal} className="btn-secondary">Kategorien</button>
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">+ Neuer Artikel</button>
@@ -482,6 +600,75 @@ export default function Articles() {
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
             <h2>{editing ? 'Artikel bearbeiten' : 'Neuer Artikel'}</h2>
             <form onSubmit={handleSubmit}>
+              {!editing && (
+                <div className="card" style={{ padding: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                    Schnell anlegen: Barcode scannen (Feld „Barcode“ → „Scannen“), in den Lieferantendaten suchen
+                    {aiEnabled ? ' oder das Etikett fotografieren' : ''}. Die Felder werden vorbelegt – bitte prüfen.
+                  </div>
+                  <div className="toolbar" style={{ margin: 0 }}>
+                    <input
+                      type="search"
+                      placeholder="Lieferantendaten durchsuchen (Bezeichnung, Bestellnr., OEM)…"
+                      aria-label="Lieferantendaten durchsuchen"
+                      value={catalogQuery}
+                      onChange={(e) => setCatalogQuery(e.target.value)}
+                    />
+                    {aiEnabled && (
+                      <>
+                        <button type="button" className="btn-secondary" disabled={labelBusy}
+                          onClick={() => (cameraSupported() ? setLabelCameraOpen(true) : labelFileRef.current?.click())}>
+                          {labelBusy ? 'Etikett wird gelesen…' : 'Etikett fotografieren (KI)'}
+                        </button>
+                        <button type="button" className="btn-secondary" disabled={labelBusy} onClick={() => labelFileRef.current?.click()}>
+                          Etikett-Bild wählen
+                        </button>
+                        <input ref={labelFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                          aria-label="Etikett-Bild" onChange={(e) => { const f = e.target.files?.[0]; if (f) recognizeLabel(f) }} />
+                      </>
+                    )}
+                  </div>
+                  {catalogSearchHits.length > 0 && (
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '0.5rem 0 0', maxHeight: 180, overflowY: 'auto' }}>
+                      {catalogSearchHits.map((c) => (
+                        <li key={c.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.2rem 0' }}>
+                          <span style={{ flex: 1, fontSize: '0.875rem' }}>
+                            {c.name}
+                            <span className="muted"> · {c.supplier_name}{c.supplier_article_number ? ` · ${c.supplier_article_number}` : ''}
+                              {c.purchase_price != null ? ` · EK ${c.purchase_price.toFixed(2)} €` : ''}</span>
+                          </span>
+                          <button type="button" className="btn-secondary btn-sm"
+                            onClick={() => { applyCatalog(c); setCatalogQuery(''); setCatalogSearchHits([]) }}>
+                            Übernehmen
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {catalogQuery.trim().length >= 2 && catalogSearchHits.length === 0 && (
+                    <p className="muted" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>Nichts gefunden.</p>
+                  )}
+                  {catalogHits.length > 1 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
+                      Mehrere Lieferanten führen diesen Barcode:{' '}
+                      {catalogHits.map((c) => (
+                        <button key={c.id} type="button" className="btn-secondary btn-sm" style={{ marginRight: '0.3rem' }}
+                          onClick={() => applyCatalog(c)}>
+                          {c.supplier_name}{c.purchase_price != null ? ` (EK ${c.purchase_price.toFixed(2)} €)` : ''}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {prefillNote && <p role="status" style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: 'var(--color-warning, #d97706)' }}>{prefillNote}</p>}
+                  {labelError && <p className="error" style={{ margin: '0.5rem 0 0' }}>{labelError}</p>}
+                  {aiEnabled && (
+                    <p className="muted" style={{ margin: '0.5rem 0 0', fontSize: '0.75rem' }}>
+                      Beim Etikett-Foto wird das Bild zur Auswertung an den KI-Dienst (Anthropic) gesendet und nicht
+                      gespeichert. Nur das Etikett fotografieren – keine Personen oder Kundenunterlagen.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="form-row">
                 <div className="form-group">
                   <label>Artikelnummer *</label>
@@ -490,7 +677,15 @@ export default function Articles() {
                 <div className="form-group">
                   <label>Barcode</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="EAN/GTIN" style={{ flex: 1 }} />
+                    <input
+                      value={form.barcode}
+                      onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                      onBlur={(e) => { if (!catalogHits.length) lookupCatalog(e.target.value) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookupCatalog(form.barcode) } }}
+                      placeholder="EAN/GTIN"
+                      aria-label="Barcode"
+                      style={{ flex: 1 }}
+                    />
                     <button type="button" className="btn-secondary" onClick={() => { setScanTarget('form'); setScanModalOpen(true) }}>
                       Scannen
                     </button>
@@ -537,6 +732,11 @@ export default function Articles() {
                     ...articles.map((a) => a.part_manufacturer).filter(Boolean),
                   ])).sort().map((n) => <option key={n} value={n} />)}
                 </datalist>
+              </div>
+              <div className="form-group">
+                <label htmlFor="art-oem">Herstellernummer / OEM-Nummer</label>
+                <input id="art-oem" maxLength={100} value={form.oem_number}
+                  onChange={(e) => setForm({ ...form, oem_number: e.target.value })} placeholder="Teilenummer des Herstellers" />
               </div>
               <div className="form-group">
                 <label>Lagerort</label>
@@ -837,6 +1037,8 @@ export default function Articles() {
         )}
         </div>
       )}
+      {showCatalogImport && <CatalogImport onClose={() => setShowCatalogImport(false)} />}
+      {labelCameraOpen && <CameraCapture onCapture={recognizeLabel} onClose={() => setLabelCameraOpen(false)} />}
       {/* Zuletzt, damit der Scanner auch über dem Artikel-Formular liegt */}
       <BarcodeScanner
         open={scanModalOpen}

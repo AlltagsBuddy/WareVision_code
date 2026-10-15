@@ -111,6 +111,9 @@ def _parse_ubl(root) -> dict:
             "unit_price": text(line, "cac:Price/cbc:PriceAmount"),
             "vat_rate": text(line, "cac:Item/cac:ClassifiedTaxCategory/cbc:Percent"),
             "line_total_net": text(line, "cbc:LineExtensionAmount"),
+            "global_id": text(line, "cac:Item/cac:StandardItemIdentification/cbc:ID"),
+            "seller_article_number": text(line, "cac:Item/cac:SellersItemIdentification/cbc:ID"),
+            "brand": text(line, "cac:Item/cbc:BrandName"),
         })
 
     return {
