@@ -6,7 +6,7 @@ Es gibt drei Ebenen von Tests:
 
 | Ebene | Ort | Werkzeug | Anzahl (Stand) |
 |---|---|---|---|
-| Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 424 |
+| Backend (API, Berechnungen, PDF, E-Rechnung) | `backend/tests/` | pytest | 430 |
 | Frontend (Seiten, Formulare) | `frontend/src/**/*.test.tsx` | vitest | 119 |
 | Ende-zu-Ende im Browser | `e2e/` | pytest + Playwright | 36 |
 
@@ -52,6 +52,7 @@ docker compose exec backend pytest -q -k Inventur
 | `test_werkstatt_erweiterungen.py` | Wartungsplan nach Baujahr (Vorrang Modell/Baujahr, unbekanntes Baujahr), Teile-Hersteller und Suche, passende Artikel je Modell, Auftragsfotos (Upload, Dateityp-Prüfung, Zugriff, Löschen, DSGVO), Suche Eingangsrechnungen/Audit-Log, Storno → Auftrag korrigieren → neue Rechnung inkl. Lager |
 | `test_two_factor.py` | Zwei-Faktor: Einrichtung mit QR-Code, Anmeldung mit Code, Code nur einmal gültig, Wiederherstellungscodes (einmalig), Zwischentoken kein Zugang, Admin-Reset, unlesbares Geheimnis; Server: unsichere Einstellungen, Standardpasswort gesperrt, Registrierung abschaltbar, Passwort mind. 10 Zeichen |
 | `test_permissions.py` | Fünf Rollen (Admin, Chef/Chefin, Büro, Werkstatt, Mitarbeiter): Vorlagen, Chef = Admin, Bereiche sehen/ändern serverseitig, Lesen für Auswahllisten, Sonderrechte (Rechnungen, Buchhaltung, DSGVO-Auskunft/-Löschen, Lager & Einkauf), letzte Leitung bleibt, Rechteänderung im Audit-Log, Webhook weiter öffentlich |
+| `test_barcode.py` | Barcode zuordnen und beim nächsten Scan finden, UPC-A/EAN-13-Variante, Barcode gehört schon anderem Artikel, Ersetzen nur mit Bestätigung (Audit-Log), Mitarbeiter ohne Artikel-Änderungsrecht abgelehnt |
 | `test_stock_counts.py` | Inventur: Blindzählung, Buchungen während der Zählung, Differenzbuchung, CSV/PDF |
 | `test_einvoice.py` | Rechnungen: Pflichtangaben § 14 UStG, MwSt je Satz, Storno, ZUGFeRD EN16931 (XSD-Prüfung), PDF/A-3, eingebettete Schriften; Eingangsrechnungen ZUGFeRD/XRechnung (UBL + CII), Dubletten, GoBD-Archiv |
 | `test_stammdaten.py` | Lieferanten, Lagerorte, Kategorien, Stundensätze, Hersteller, Barcode, Reservierungen |

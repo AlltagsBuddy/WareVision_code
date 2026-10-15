@@ -124,8 +124,13 @@ export default function StockCounts() {
 
   /** Treffer per Barcode/Artikelnummer: Eingabefeld der Zeile fokussieren */
   const jumpTo = (code: string) => {
-    const c = code.trim().toLowerCase()
-    const hit = items.find((i) => (i.barcode || '').toLowerCase() === c || i.article_number.toLowerCase() === c)
+    const c = code.replace(/\s+/g, '').toLowerCase()
+    // UPC-A (12 Ziffern) und EAN-13 mit führender 0 sind derselbe Code
+    const same = (bc: string) => {
+      const x = (bc || '').replace(/\s+/g, '').toLowerCase()
+      return !!x && (x === c || x === '0' + c || '0' + x === c)
+    }
+    const hit = items.find((i) => same(i.barcode) || i.article_number.toLowerCase() === c)
     if (hit) {
       setSearch(hit.article_number)
       setTimeout(() => inputRefs.current[hit.id]?.focus(), 50)
@@ -395,7 +400,7 @@ export default function StockCounts() {
           onClose={() => setScannerOpen(false)}
           onScan={(code) => {
             setScannerOpen(false)
-            if (!jumpTo(code)) setError(`Kein Artikel mit Barcode/Nummer „${code}“ in dieser Inventur.`)
+            if (!jumpTo(code)) setError(`Kein Artikel mit Barcode/Nummer „${code}“ in dieser Inventur. Ist der Barcode noch keinem Artikel zugeordnet, unter Artikel → „Barcode (Enter)“ zuordnen.`)
           }}
         />
         {preview && (

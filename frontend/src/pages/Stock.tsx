@@ -26,6 +26,9 @@ export default function Stock() {
   })
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeError, setBarcodeError] = useState('')
+  // Gescannter Barcode ohne Artikel: wird beim Speichern dem gewählten Artikel zugeordnet
+  const [unknownCode, setUnknownCode] = useState('')
+  const [assignCode, setAssignCode] = useState(true)
   const [scanModalOpen, setScanModalOpen] = useState(false)
 
   const [movementSearch, setMovementSearch] = useState('')
@@ -49,7 +52,7 @@ export default function Stock() {
       stockApi.lowStock(),
       stockApi.movements(),
       stockApi.reservations({ status: 'active' }),
-      articlesApi.list(),
+      articlesApi.list({ limit: 200 }),
     ])
       .then(([low, mov, res, arts]) => {
         setLowStock(low)
@@ -73,6 +76,18 @@ export default function Stock() {
     }
     setSubmitting(true)
     try {
+      if (unknownCode && assignCode) {
+        try {
+          await articlesApi.assignBarcode(form.article_id, unknownCode)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : ''
+          if (/Ersetzen\?/.test(msg) && confirm(`${msg}\n\nOK = neuen Barcode ${unknownCode} speichern.`)) {
+            await articlesApi.assignBarcode(form.article_id, unknownCode, true)
+          } else if (!/Ersetzen\?/.test(msg)) {
+            throw err
+          }
+        }
+      }
       await stockApi.createMovement({
         article_id: form.article_id,
         movement_type: form.movement_type,
@@ -81,6 +96,7 @@ export default function Stock() {
       })
       setShowForm(false)
       setForm({ article_id: '', movement_type: 'incoming', quantity: 1, notes: '' })
+      setUnknownCode('')
       load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler')
@@ -89,28 +105,26 @@ export default function Stock() {
     }
   }
 
-  const handleBarcodeScan = async () => {
-    const code = barcodeInput.trim()
+  /** Barcode suchen; unbekannt → merken, damit er beim Speichern dem gewählten Artikel zugeordnet wird */
+  const lookupCode = useCallback(async (raw: string) => {
+    const code = raw.replace(/\s+/g, '')
     if (!code) return
     setBarcodeError('')
+    setBarcodeInput(code)
     try {
       const article = await articlesApi.getByBarcode(code)
+      setArticles((prev) => (prev.some((a) => a.id === article.id) ? prev : [article, ...prev]))
       setForm((f) => ({ ...f, article_id: article.id }))
-      setBarcodeInput('')
+      setUnknownCode('')
     } catch {
-      setBarcodeError('Artikel mit diesem Barcode nicht gefunden')
-    }
-  }
-
-  const handleScanResult = useCallback(async (code: string) => {
-    setBarcodeError('')
-    try {
-      const article = await articlesApi.getByBarcode(code.trim())
-      setForm((f) => ({ ...f, article_id: article.id }))
-    } catch {
-      setBarcodeError('Artikel mit diesem Barcode nicht gefunden')
+      setUnknownCode(code)
+      setAssignCode(true)
+      setForm((f) => ({ ...f, article_id: '' }))
     }
   }, [])
+
+  const handleBarcodeScan = () => lookupCode(barcodeInput)
+  const handleScanResult = useCallback((code: string) => { lookupCode(code) }, [lookupCode])
 
   const handleReservationSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -210,7 +224,7 @@ export default function Stock() {
     <div className="page">
       <h1>Lager</h1>
       <div className="toolbar">
-        <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
+        <button type="button" onClick={() => { setUnknownCode(''); setBarcodeInput(''); setBarcodeError(''); setShowForm(true) }} className="btn-primary">
           + Wareneingang / Warenausgang
         </button>
         <button type="button" onClick={() => setShowReservationForm(true)} className="btn-secondary">
@@ -240,6 +254,16 @@ export default function Stock() {
                   <button type="button" onClick={handleBarcodeScan} className="btn-secondary">Suchen</button>
                 </div>
                 {barcodeError && <p className="error" style={{ marginTop: '0.25rem' }}>{barcodeError}</p>}
+                {unknownCode && (
+                  <div className="card" role="status" style={{ marginTop: '0.5rem', padding: '0.6rem 0.75rem', fontSize: '0.9rem' }}>
+                    Barcode <strong>{unknownCode}</strong> ist noch keinem Artikel zugeordnet. Bitte den Artikel unten auswählen.
+                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.4rem', cursor: 'pointer', fontWeight: 400 }}>
+                      <input type="checkbox" checked={assignCode} onChange={(e) => setAssignCode(e.target.checked)}
+                        style={{ width: 16, height: 16, flex: 'none', margin: 0 }} />
+                      <span style={{ textAlign: 'left' }}>Barcode beim Speichern diesem Artikel zuordnen (beim nächsten Scan wird er erkannt)</span>
+                    </label>
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label>Artikel *</label>

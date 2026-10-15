@@ -1,7 +1,7 @@
 # Lager
 
 ## Wareneingang, Warenausgang, Korrektur
-„+ Wareneingang / Warenausgang“ öffnet die Erfassung. Artikel per Liste, Barcode-Suche oder „Kamera scannen“ wählen, Bewegungstyp (Wareneingang, Warenausgang, Korrektur), Menge und Notiz eintragen. Eine Korrektur zieht Menge vom Bestand ab; für eine Erhöhung „Wareneingang“ verwenden. Lagermengen sind ganze Stück.
+„+ Wareneingang / Warenausgang“ öffnet die Erfassung. Artikel per Liste, Barcode-Suche oder „Kamera scannen“ wählen, Bewegungstyp (Wareneingang, Warenausgang, Korrektur), Menge und Notiz eintragen. Eine Korrektur zieht Menge vom Bestand ab; für eine Erhöhung „Wareneingang“ verwenden. Lagermengen sind ganze Stück. Ist ein gescannter Barcode noch unbekannt, den Artikel aus der Liste wählen: Mit dem Häkchen „Barcode beim Speichern diesem Artikel zuordnen“ (voreingestellt) wird der Code gespeichert und beim nächsten Scan erkannt.
 
 ## Automatische Lagerbuchungen
 - Werkstattauftrag: Teile-Positionen mit Artikel werden beim Hinzufügen gebucht und beim Entfernen zurückgebucht.

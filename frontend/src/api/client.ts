@@ -294,6 +294,9 @@ export const articlesApi = {
   get: (id: string) => api<any>(`/articles/${id}`),
   getByBarcode: (barcode: string) =>
     api<any>(`/articles/barcode/${encodeURIComponent(barcode)}`),
+  /** Gescannten Barcode einem Artikel zuordnen (replace = vorhandenen Barcode ersetzen) */
+  assignBarcode: (id: string, barcode: string, replace = false) =>
+    api<any>(`/articles/${id}/barcode`, { method: 'POST', body: JSON.stringify({ barcode, replace }) }),
   update: (id: string, data: Record<string, unknown>) =>
     api<any>(`/articles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) =>

@@ -6,6 +6,9 @@
 ## Barcode und Kamera
 Im Feld „Barcode (Enter)“ kannst du mit einem Handscanner scannen. Mit „Kamera scannen“ nutzt du die Kamera (Notebook-Webcam, Tablet oder Smartphone): Barcode vor die Kamera halten, er wird automatisch erkannt. Klappt das nicht, „Foto aufnehmen“ klicken – dann wird das aktuelle Kamerabild nach dem Code durchsucht. „Bild auswählen“ liest den Code aus einem vorhandenen Foto. Die Kamera im Browser funktioniert nur über https oder direkt am Rechner (localhost).
 
+## Unbekannten Barcode zuordnen
+Gehört ein gescannter Barcode noch zu keinem Artikel, erscheint „ist noch keinem Artikel zugeordnet“. Dann entweder im Feld darunter den vorhandenen Artikel suchen und „Zuordnen“ klicken, oder „+ Neuer Artikel mit diesem Barcode“ wählen. Ab dann wird der Artikel beim Scannen erkannt. Im Artikel-Formular füllt „Scannen“ neben dem Barcode-Feld den Code per Kamera ein. Ein Barcode kann nur zu einem Artikel gehören; hat der Artikel schon einen anderen Barcode, fragt WareVision vor dem Ersetzen nach. Die Zuordnung steht im Audit-Log.
+
 ## Lagerorte und Kategorien verwalten
 Über die Buttons „Lagerorte“ und „Kategorien“ legst du diese an, benennst sie um oder löschst sie. Lagerorte helfen bei der Inventur (Teilinventur je Lagerort).
 

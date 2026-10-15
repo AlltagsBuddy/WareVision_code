@@ -23,6 +23,12 @@ export default function Articles() {
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeFilter, setBarcodeFilter] = useState('')
   const [scanModalOpen, setScanModalOpen] = useState(false)
+  // Wohin der gescannte Code geht: Suche in der Liste oder Barcode-Feld im Formular
+  const [scanTarget, setScanTarget] = useState<'filter' | 'form'>('filter')
+  // Zuordnen eines unbekannten Barcodes zu einem vorhandenen Artikel
+  const [assignSearch, setAssignSearch] = useState('')
+  const [assignHits, setAssignHits] = useState<any[]>([])
+  const [assignMsg, setAssignMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
@@ -83,14 +89,18 @@ export default function Articles() {
   }, [])
 
   useEffect(() => {
+    // Ältere Antworten verwerfen (z. B. Scan direkt nach dem Öffnen der Seite)
+    let stale = false
     setLoading(true)
     articlesApi
       .list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined, category_id: categoryFilter || undefined, vehicle_model_id: modelFilter || undefined, limit: PAGE_SIZE, skip: 0 })
       .then((data) => {
+        if (stale) return
         setArticles(data)
         setHasMore(data.length === PAGE_SIZE)
       })
-      .finally(() => setLoading(false))
+      .finally(() => { if (!stale) setLoading(false) })
+    return () => { stale = true }
   }, [search, barcodeFilter, categoryFilter, modelFilter])
 
   const handleLoadMore = async () => {
@@ -169,7 +179,7 @@ export default function Articles() {
           compatible_model_ids: form.compatible_model_ids,
         }
         await articlesApi.update(editing.id, updateData)
-        const updated = await articlesApi.list({ search: search || undefined })
+        const updated = await articlesApi.list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined })
         setArticles(categoryFilter ? updated.filter((a: any) => a.category_id === categoryFilter) : updated)
       } else {
         const createData = {
@@ -191,7 +201,7 @@ export default function Articles() {
           compatible_model_ids: form.compatible_model_ids,
         }
         await articlesApi.create(createData)
-        const updated = await articlesApi.list({ search: search || undefined })
+        const updated = await articlesApi.list({ search: barcodeFilter ? undefined : (search || undefined), barcode: barcodeFilter || undefined })
         setArticles(categoryFilter ? updated.filter((a: any) => a.category_id === categoryFilter) : updated)
       }
       setShowForm(false)
@@ -214,10 +224,58 @@ export default function Articles() {
   }
 
   const handleScanResult = useCallback((code: string) => {
-    setBarcodeFilter(code.trim())
-    setBarcodeInput(code.trim())  // gescannten Code sichtbar machen
+    const clean = code.replace(/\s+/g, '')
+    if (scanTarget === 'form') {
+      setForm((f) => ({ ...f, barcode: clean }))
+      setScanModalOpen(false)
+      return
+    }
+    setBarcodeFilter(clean)
+    setBarcodeInput(clean)  // gescannten Code sichtbar machen
     setSearch('')
-  }, [])
+    setAssignSearch('')
+    setAssignHits([])
+    setAssignMsg('')
+  }, [scanTarget])
+
+  // Unbekannter Barcode: passende Artikel zum Zuordnen suchen
+  useEffect(() => {
+    const q = assignSearch.trim()
+    if (!barcodeFilter || q.length < 2) {
+      setAssignHits([])
+      return
+    }
+    const t = setTimeout(() => {
+      articlesApi.list({ search: q, limit: 20 }).then(setAssignHits).catch(() => setAssignHits([]))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [assignSearch, barcodeFilter])
+
+  const assignTo = async (a: any) => {
+    setAssignMsg('')
+    try {
+      let updated
+      try {
+        updated = await articlesApi.assignBarcode(a.id, barcodeFilter)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Fehler'
+        if (!/Ersetzen\?/.test(msg)) throw err
+        if (!confirm(`${msg}\n\nOK = neuen Barcode ${barcodeFilter} speichern.`)) return
+        updated = await articlesApi.assignBarcode(a.id, barcodeFilter, true)
+      }
+      setArticles([updated])
+      setAssignHits([])
+      setAssignSearch('')
+    } catch (err) {
+      setAssignMsg(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const newWithBarcode = () => {
+    resetForm()
+    setForm((f) => ({ ...f, barcode: barcodeFilter }))
+    setShowForm(true)
+  }
 
   const openEdit = (a: any) => {
     setEditing(a)
@@ -410,18 +468,13 @@ export default function Articles() {
           }}
           style={{ maxWidth: 160 }}
         />
-        <button type="button" onClick={() => setScanModalOpen(true)} className="btn-secondary">
+        <button type="button" onClick={() => { setScanTarget('filter'); setScanModalOpen(true) }} className="btn-secondary">
           Kamera scannen
         </button>
         <button type="button" onClick={openLocModal} className="btn-secondary">Lagerorte</button>
         <button type="button" onClick={openCatModal} className="btn-secondary">Kategorien</button>
         <button type="button" onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary">+ Neuer Artikel</button>
       </div>
-      <BarcodeScanner
-        open={scanModalOpen}
-        onScan={handleScanResult}
-        onClose={() => setScanModalOpen(false)}
-      />
 
       {/* Artikel-Formular */}
       {showForm && (
@@ -436,7 +489,12 @@ export default function Articles() {
                 </div>
                 <div className="form-group">
                   <label>Barcode</label>
-                  <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="EAN/GTIN" />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="EAN/GTIN" style={{ flex: 1 }} />
+                    <button type="button" className="btn-secondary" onClick={() => { setScanTarget('form'); setScanModalOpen(true) }}>
+                      Scannen
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="form-group">
@@ -678,6 +736,49 @@ export default function Articles() {
         </div>
       )}
 
+      {barcodeFilter && (
+        <div className="card" role="status" style={{ padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>Barcode <strong>{barcodeFilter}</strong>{!loading && articles.length === 0 && ' ist noch keinem Artikel zugeordnet.'}</span>
+            <button type="button" className="btn-secondary btn-sm" onClick={() => { setBarcodeFilter(''); setBarcodeInput('') }}>
+              Filter aufheben
+            </button>
+          </div>
+          {!loading && articles.length === 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <div className="toolbar" style={{ margin: 0 }}>
+                <input
+                  type="search"
+                  placeholder="Vorhandenen Artikel suchen (Nr., Name)…"
+                  aria-label="Artikel zum Zuordnen suchen"
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                />
+                <span className="muted">oder</span>
+                <button type="button" className="btn-primary" style={{ width: 'auto' }} onClick={newWithBarcode}>+ Neuer Artikel mit diesem Barcode</button>
+              </div>
+              {assignHits.length > 0 && (
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0.5rem 0 0' }}>
+                  {assignHits.map((a) => (
+                    <li key={a.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.25rem 0' }}>
+                      <span style={{ flex: 1 }}>
+                        {a.article_number} – {a.name}
+                        {a.barcode && <span className="muted"> (hat schon Barcode {a.barcode})</span>}
+                      </span>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => assignTo(a)}>Zuordnen</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {assignSearch.trim().length >= 2 && assignHits.length === 0 && (
+                <p className="muted" style={{ margin: '0.5rem 0 0' }}>Kein Artikel gefunden.</p>
+              )}
+              {assignMsg && <p className="error" style={{ margin: '0.5rem 0 0' }}>{assignMsg}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <p>Laden...</p>
       ) : (
@@ -736,6 +837,12 @@ export default function Articles() {
         )}
         </div>
       )}
+      {/* Zuletzt, damit der Scanner auch über dem Artikel-Formular liegt */}
+      <BarcodeScanner
+        open={scanModalOpen}
+        onScan={handleScanResult}
+        onClose={() => setScanModalOpen(false)}
+      />
     </div>
   )
 }
