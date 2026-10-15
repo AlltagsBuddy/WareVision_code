@@ -13,12 +13,12 @@ class TestBenutzer:
         roles = admin_client.get(f"{V1}/users/roles").json()
         werkstatt = next(r for r in roles if r["name"] == "werkstatt")
         res = admin_client.post(f"{V1}/users", json={"email": "mech@test.de", "first_name": "Max", "last_name": "Mech",
-                                                     "password": "geheim123", "role_id": werkstatt["id"]})
+                                                     "password": "geheim12345", "role_id": werkstatt["id"]})
         assert res.status_code == 201, res.text
         uid = res.json()["id"]
         assert res.json()["role_name"] == "werkstatt"
         assert admin_client.post(f"{V1}/users", json={"email": "mech@test.de", "first_name": "A", "last_name": "B",
-                                                      "password": "geheim123", "role_id": werkstatt["id"]}).status_code == 409
+                                                      "password": "geheim12345", "role_id": werkstatt["id"]}).status_code == 409
         res = admin_client.patch(f"{V1}/users/{uid}", json={"permissions": {"invoices": {"visible": False, "write": False}}})
         assert res.json()["permissions"]["invoices"]["visible"] is False
         assert admin_client.delete(f"{V1}/users/{uid}").status_code == 204
@@ -43,16 +43,16 @@ class TestRegistrierungUndExport:
         from app.models.user import User
 
         res = client.post(f"{V1}/auth/register", json={"email": "Neu@Test.de", "first_name": "Neu", "last_name": "Nutzer",
-                                                       "password": "geheim123"})
+                                                       "password": "geheim12345"})
         assert res.status_code in (200, 201), res.text
         user = db.query(User).filter(User.email == "neu@test.de").first()
         assert user is not None and user.is_active is False  # Freischaltung durch Admin nötig
-        login = client.post(f"{V1}/auth/login", json={"email": "neu@test.de", "password": "geheim123"})
+        login = client.post(f"{V1}/auth/login", json={"email": "neu@test.de", "password": "geheim12345"})
         assert login.status_code in (401, 403)
 
     def test_registrierung_doppelt(self, client, admin_user):
         res = client.post(f"{V1}/auth/register", json={"email": admin_user.email, "first_name": "A", "last_name": "B",
-                                                       "password": "geheim123"})
+                                                       "password": "geheim12345"})
         assert res.status_code == 409
 
     def test_dsgvo_export_eigene_daten(self, admin_client, admin_user):

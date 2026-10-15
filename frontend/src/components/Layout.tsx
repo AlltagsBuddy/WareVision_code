@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { authApi } from '../api/client'
 import Logo from './Logo'
+import TwoFactorModal from './TwoFactorModal'
 
 interface NavItem {
   path: string
@@ -71,6 +72,7 @@ export default function Layout() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [showTwoFactor, setShowTwoFactor] = useState(false)
   const [pwForm, setPwForm] = useState({ current: '', new: '', confirm: '' })
   const [pwError, setPwError] = useState('')
   const [pwSubmitting, setPwSubmitting] = useState(false)
@@ -284,6 +286,9 @@ export default function Layout() {
                 <button type="button" role="menuitem" onClick={() => { setUserMenuOpen(false); setShowPasswordModal(true) }}>
                   Passwort ändern
                 </button>
+                <button type="button" role="menuitem" onClick={() => { setUserMenuOpen(false); setShowTwoFactor(true) }}>
+                  Zwei-Faktor-Anmeldung
+                </button>
                 <button type="button" role="menuitem" className="account-logout" onClick={logout}>Abmelden</button>
               </div>
             )}
@@ -293,6 +298,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {showTwoFactor && <TwoFactorModal onClose={() => setShowTwoFactor(false)} />}
 
       {showPasswordModal && (
         <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
@@ -306,8 +313,8 @@ export default function Layout() {
                   setPwError('Neues Passwort und Bestätigung stimmen nicht überein.')
                   return
                 }
-                if (pwForm.new.length < 6) {
-                  setPwError('Neues Passwort muss mindestens 6 Zeichen haben.')
+                if (pwForm.new.length < 10) {
+                  setPwError('Neues Passwort muss mindestens 10 Zeichen haben.')
                   return
                 }
                 setPwSubmitting(true)
@@ -338,7 +345,7 @@ export default function Layout() {
                   value={pwForm.new}
                   onChange={(e) => setPwForm((f) => ({ ...f, new: e.target.value }))}
                   required
-                  minLength={6}
+                  minLength={10}
                 />
               </div>
               <div className="form-group">

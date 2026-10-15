@@ -1,0 +1,158 @@
+# WareVision – Betrieb auf dem Server (Hetzner)
+#
+# Start (im Ordner mit dieser Datei und der .env):
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# Mit eingebautem Webserver (Caddy, holt das https-Zertifikat automatisch) –
+# nur wenn auf dem Server Port 80/443 noch frei sind:
+#   docker compose -f docker-compose.prod.yml --env-file .env --profile caddy up -d --build
+#
+# Ein Kunde = eine eigene Instanz (eigene Datenbank, eigene Dateien, eigene Adresse):
+#   docker compose -p quadparadies -f docker-compose.prod.yml --env-file .env up -d
+# Anleitung: docs/ANLEITUNG_SERVER.md
+
+x-app-env: &app-env
+  APP_ENV: production
+  PUBLIC_URL: https://${WAREVISION_DOMAIN:?WAREVISION_DOMAIN fehlt in .env}
+  DATABASE_URL: postgresql://warevision:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@postgres:5432/warevision
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY fehlt in .env}
+  UPLOAD_DIR: /app/uploads
+  TWO_FACTOR_REQUIRED: "true"
+  REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  TZ: Europe/Berlin
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: mirror.gcr.io/library/postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: warevision
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: warevision
+      TZ: Europe/Berlin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warevision"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  redis:
+    image: mirror.gcr.io/library/redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    # Kein Port nach außen: nur über den Frontend-Container erreichbar.
+    # --proxy-headers: echte Besucher-IP für Anmeldebegrenzung und Audit-Log
+    command: >
+      sh -c "python scripts/prepare_db.py &&
+             exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
+    environment: *app-env
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *logging
+
+  celery-worker:
+    build: ./backend
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app worker --loglevel=info -Q celery --concurrency=2
+    environment: *app-env
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      backend:
+        condition: service_started
+    logging: *logging
+
+  celery-beat:
+    build: ./backend
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    environment: *app-env
+    depends_on:
+      backend:
+        condition: service_started
+    logging: *logging
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    # Nur lokal auf dem Server erreichbar – der Webserver (Caddy/nginx) leitet https dorthin weiter
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+    depends_on:
+      - backend
+    logging: *logging
+
+  # Optional: eigener Webserver mit automatischem https-Zertifikat (Let's Encrypt).
+  # Nur verwenden, wenn auf dem Server noch nichts Port 80/443 belegt.
+  caddy:
+    image: mirror.gcr.io/library/caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["caddy"]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      WAREVISION_DOMAIN: ${WAREVISION_DOMAIN}
+    volumes:
+      - ./infra/server/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    logging: *logging
+
+  # Tägliche Sicherung: siehe docs/ANLEITUNG_SERVER.md (Cron)
+  backup:
+    image: mirror.gcr.io/library/postgres:16-alpine
+    profiles: ["backup"]
+    environment:
+      PGHOST: postgres
+      PGUSER: warevision
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: warevision
+      BACKUP_DIR: /backups
+      UPLOADS_DIR: /uploads
+      TZ: Europe/Berlin
+    volumes:
+      - ${BACKUP_PATH:-./backups}:/backups
+      - uploads_data:/uploads:ro
+      - ./infra/backup/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

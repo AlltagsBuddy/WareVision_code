@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,5 +33,12 @@ class User(BaseModel):
         nullable=True,
     )
     permissions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # Modulberechtigungen
+    # Zwei-Faktor-Anmeldung (TOTP); Geheimnis verschlüsselt, Wiederherstellungscodes nur als Hash
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+    totp_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_pending_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_last_counter: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recovery_codes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     role: Mapped["Role"] = relationship("Role", back_populates="users")

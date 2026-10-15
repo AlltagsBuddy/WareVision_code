@@ -34,6 +34,28 @@ def init_roles_and_admin(db, reset_admin: bool = False):
             db.add(Role(name=role_name, description=role_desc))
     db.flush()
 
+    import os
+
+    from app.core.config import get_settings
+
+    if get_settings().is_production:
+        # Auf dem Server nie ein Konto mit Standardpasswort anlegen
+        if reset_admin:
+            print("--reset-admin ist auf dem Server gesperrt. Bitte scripts/manage_user.py set-password verwenden.")
+        has_admin = db.query(User).filter(User.role_id == admin_role.id).first() is not None
+        email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+        password = os.environ.get("ADMIN_PASSWORD", "")
+        if not has_admin and email and len(password) >= 10:
+            db.add(User(role_id=admin_role.id, first_name="Admin", last_name="WareVision",
+                        email=email, password_hash=get_password_hash(password)))
+            print(f"Admin {email} angelegt.")
+        elif not has_admin:
+            print("Kein Admin vorhanden. ADMIN_EMAIL und ADMIN_PASSWORD (mind. 10 Zeichen) setzen "
+                  "oder Daten vom PC übernehmen.")
+        db.commit()
+        print("Rollen geprüft.")
+        return
+
     admin_user = db.query(User).filter(User.email == "admin@warevision.local").first()
     if not admin_user:
         admin_user = User(

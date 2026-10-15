@@ -14,6 +14,11 @@ export type AuthUser = {
   permissions?: UserPermissions
 }
 
+export type LoginStep =
+  | { step: 'ok' }
+  | { step: '2fa'; challenge: string }
+  | { step: 'setup'; challenge: string }
+
 export function useAuth() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -30,12 +35,29 @@ export function useAuth() {
       .finally(() => setLoading(false))
   }, [token])
 
-  const login = async (email: string, password: string) => {
-    const { access_token } = await authApi.login(email, password)
-    localStorage.setItem('token', access_token)
-    setToken(access_token)
+  /** Zugangstoken speichern und Benutzer laden (nach Passwort bzw. Zwei-Faktor-Schritt). */
+  const completeLogin = async (accessToken: string) => {
+    localStorage.setItem('token', accessToken)
+    setToken(accessToken)
     const u = await authApi.me()
     setUser(u)
+  }
+
+  /**
+   * Anmeldung mit Passwort. Ergebnis:
+   * - 'ok': angemeldet
+   * - '2fa': Code aus der Authenticator-App nötig
+   * - 'setup': Zwei-Faktor muss erst eingerichtet werden
+   */
+  const login = async (email: string, password: string): Promise<LoginStep> => {
+    const res = await authApi.login(email, password)
+    if (res.access_token) {
+      await completeLogin(res.access_token)
+      return { step: 'ok' }
+    }
+    if (res.two_factor_required && res.challenge_token) return { step: '2fa', challenge: res.challenge_token }
+    if (res.two_factor_setup_required && res.challenge_token) return { step: 'setup', challenge: res.challenge_token }
+    throw new Error('Unerwartete Antwort bei der Anmeldung')
   }
 
   const logout = () => {
@@ -64,5 +86,5 @@ export function useAuth() {
     return user.permissions?.[module]?.write !== false
   }
 
-  return { token, user, loading, login, logout, canView, canWrite }
+  return { token, user, loading, login, completeLogin, logout, canView, canWrite }
 }

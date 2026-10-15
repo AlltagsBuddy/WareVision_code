@@ -6,6 +6,9 @@ Benutzer → „+ Neuer Benutzer“: Vorname, Nachname, E-Mail (Login), Rolle un
 ## Modulberechtigungen
 Das Suchfeld filtert die Liste nach Name, E-Mail oder Rolle. Für Nicht-Admins legst du je Modul fest, ob es sichtbar ist und ob geschrieben werden darf („Alle an“/„Alle aus“). Admins haben automatisch alle Rechte.
 
+## Zwei-Faktor-Anmeldung zurücksetzen
+Die Spalte „2FA“ zeigt, wer die Zwei-Faktor-Anmeldung eingerichtet hat. Hat jemand ein neues Handy oder es verloren und keine Wiederherstellungscodes mehr, „2FA zurücksetzen“ klicken. Die Person richtet sie bei der nächsten Anmeldung neu ein. Das Zurücksetzen wird im Audit-Log protokolliert.
+
 ## Selbstregistrierung
 Über den Link /register können sich neue Benutzer selbst anlegen; sie erhalten die Rolle „Werkstatt“ ohne Admin-Rechte. Das neue Konto ist zunächst gesperrt: Erst wenn ein Admin unter Benutzer auf „Freischalten“ klickt, ist eine Anmeldung möglich.
 

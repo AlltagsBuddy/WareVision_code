@@ -159,6 +159,7 @@ def client(db):
 
     # Rate-Limiting in Tests deaktivieren
     limiter._storage = None  # type: ignore[attr-defined]
+    limiter.enabled = False
 
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c

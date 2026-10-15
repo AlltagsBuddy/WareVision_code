@@ -20,7 +20,9 @@ export async function api<T>(
   }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
-  if (res.status === 401) {
+  // Bei Anmeldeschritten (Passwort, 2FA-Code) die Fehlermeldung anzeigen statt zur Anmeldung umzuleiten
+  const isAuthStep = path.startsWith('/auth/login') || path.startsWith('/auth/2fa/verify') || path.startsWith('/auth/2fa/setup')
+  if (res.status === 401 && !isAuthStep) {
     localStorage.removeItem('token')
     window.location.href = '/login'
     throw new Error('Unauthorized')
@@ -31,8 +33,14 @@ export async function api<T>(
       ? await res.json().catch(() => ({}))
       : {}
     let msg = err.detail || err.message || res.statusText || 'Fehler'
+    if (res.status === 413) {
+      msg = 'Datei ist zu groß für den Server.'
+    } else if (res.status === 429) {
+      msg = err.detail && typeof err.detail === 'string' && !err.detail.startsWith('Rate limit')
+        ? err.detail : 'Zu viele Versuche. Bitte eine Minute warten und erneut versuchen.'
+    }
     // ngrok-Interstitial liefert HTML statt JSON
-    if (ct.includes('text/html')) {
+    if (ct.includes('text/html') && res.status !== 413) {
       msg = 'Bitte zuerst auf „Visit Site“ klicken (ngrok-Zwischenseite) und erneut versuchen.'
     }
     throw new Error(msg)
@@ -41,16 +49,38 @@ export async function api<T>(
   return res.json()
 }
 
+export type LoginResult = {
+  access_token: string | null
+  token_type?: string
+  two_factor_required: boolean
+  two_factor_setup_required: boolean
+  challenge_token: string | null
+}
+
 export const dashboardApi = {
   getStats: () => api<Record<string, number>>('/dashboard/stats'),
 }
 
 export const authApi = {
   login: (email: string, password: string) =>
-    api<{ access_token: string }>('/auth/login', {
+    api<LoginResult>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  verifyTwoFactor: (challenge_token: string, code: { code?: string; recovery_code?: string }) =>
+    api<LoginResult>('/auth/2fa/verify', { method: 'POST', body: JSON.stringify({ challenge_token, ...code }) }),
+  startTwoFactorSetup: (challenge_token: string) =>
+    api<{ secret: string; otpauth_uri: string; qr_data_uri: string; account: string }>('/auth/2fa/setup/start', {
+      method: 'POST', body: JSON.stringify({ challenge_token }),
+    }),
+  confirmTwoFactorSetup: (challenge_token: string, code: string) =>
+    api<{ access_token: string; recovery_codes: string[] }>('/auth/2fa/setup/confirm', {
+      method: 'POST', body: JSON.stringify({ challenge_token, code }),
+    }),
+  twoFactorStatus: () =>
+    api<{ enabled: boolean; required: boolean; enabled_at: string | null; recovery_codes_left: number }>('/auth/2fa/status'),
+  renewRecoveryCodes: (code: string) =>
+    api<string[]>('/auth/2fa/recovery-codes', { method: 'POST', body: JSON.stringify({ code }) }),
   register: (data: { email: string; first_name: string; last_name: string; password: string }) =>
     api<{ access_token: string }>('/auth/register', {
       method: 'POST',
@@ -174,6 +204,8 @@ export const usersApi = {
     api<any>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deactivate: (id: string) =>
     api<void>(`/users/${id}`, { method: 'DELETE' }),
+  resetTwoFactor: (id: string) =>
+    api<any>(`/users/${id}/reset-2fa`, { method: 'POST' }),
 }
 
 export const customersApi = {

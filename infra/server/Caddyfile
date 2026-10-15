@@ -1,0 +1,10 @@
+# Caddy holt und erneuert das https-Zertifikat automatisch (Let's Encrypt).
+# Voraussetzung: Der DNS-Eintrag der Domain zeigt auf diesen Server, Port 80 und 443 sind offen.
+{$WAREVISION_DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy frontend:80
+}

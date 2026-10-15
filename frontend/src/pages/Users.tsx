@@ -76,8 +76,8 @@ export default function Users() {
       setError('Passwort erforderlich.')
       return
     }
-    if (!editing && form.password.length < 6) {
-      setError('Passwort mindestens 6 Zeichen.')
+    if (!editing && form.password.length < 10) {
+      setError('Passwort mindestens 10 Zeichen.')
       return
     }
     setSubmitting(true)
@@ -138,6 +138,17 @@ export default function Users() {
     try {
       await usersApi.update(u.id, { is_active: true })
       setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_active: true } : x)))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler')
+    }
+  }
+
+  const handleResetTwoFactor = async (u: any) => {
+    if (!confirm(`Zwei-Faktor-Anmeldung von "${u.first_name} ${u.last_name}" zurücksetzen? `
+      + 'Die Person richtet sie bei der nächsten Anmeldung neu ein (z. B. nach Handywechsel).')) return
+    try {
+      const updated = await usersApi.resetTwoFactor(u.id)
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, totp_enabled: updated.totp_enabled } : x)))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler')
     }
@@ -289,8 +300,8 @@ export default function Users() {
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     required={!editing}
-                    minLength={editing ? undefined : 6}
-                    placeholder={editing ? 'Leer lassen' : 'Mind. 6 Zeichen'}
+                    minLength={editing ? undefined : 10}
+                    placeholder={editing ? 'Leer lassen' : 'Mind. 10 Zeichen'}
                   />
                 </div>
               </div>
@@ -391,13 +402,14 @@ export default function Users() {
                 <th>Rolle</th>
                 <th>Module</th>
                 <th>Status</th>
+                <th>2FA</th>
                 <th>Letzter Login</th>
                 <th>Aktionen</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.length === 0 && (
-                <tr><td colSpan={7}>Keine Benutzer gefunden.</td></tr>
+                <tr><td colSpan={8}>Keine Benutzer gefunden.</td></tr>
               )}
               {filteredUsers.map((u) => {
                 const isAdmin = u.role_name === 'admin'
@@ -430,6 +442,7 @@ export default function Users() {
                         : <span style={{ color: 'var(--color-warning, orange)', fontWeight: 600 }}>Inaktiv</span>
                       }
                     </td>
+                    <td>{u.totp_enabled ? 'Eingerichtet' : <span style={{ color: 'var(--color-text-muted)' }}>Nein</span>}</td>
                     <td>{u.last_login_at ? new Date(u.last_login_at).toLocaleString('de-DE') : '-'}</td>
                     <td>
                       <button type="button" onClick={() => openEdit(u)} className="btn-secondary btn-sm">
@@ -447,6 +460,11 @@ export default function Users() {
                       ) : (
                         <button type="button" onClick={() => handleActivate(u)} className="btn-primary btn-sm">
                           Freischalten
+                        </button>
+                      )}
+                      {u.totp_enabled && (
+                        <button type="button" onClick={() => handleResetTwoFactor(u)} className="btn-secondary btn-sm">
+                          2FA zurücksetzen
                         </button>
                       )}
                     </td>

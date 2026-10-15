@@ -2,12 +2,68 @@
 
 from pydantic import BaseModel, EmailStr, field_validator
 
+# Mindestlänge für neue Passwörter (WareVision ist über das Internet erreichbar)
+MIN_PASSWORD_LENGTH = 10
+
 
 class Token(BaseModel):
     """JWT token response."""
 
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginResponse(BaseModel):
+    """Antwort auf die Passwort-Anmeldung.
+
+    Ohne Zwei-Faktor kommt direkt access_token. Sonst kommt ein kurzlebiges challenge_token,
+    mit dem der Code bestätigt (two_factor_required) oder 2FA eingerichtet wird (two_factor_setup_required).
+    """
+
+    access_token: str | None = None
+    token_type: str = "bearer"
+    two_factor_required: bool = False
+    two_factor_setup_required: bool = False
+    challenge_token: str | None = None
+
+
+class TwoFactorVerifyRequest(BaseModel):
+    challenge_token: str
+    code: str | None = None
+    recovery_code: str | None = None
+
+
+class TwoFactorSetupRequest(BaseModel):
+    challenge_token: str
+
+
+class TwoFactorSetupStart(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_data_uri: str
+    account: str
+
+
+class TwoFactorConfirmRequest(BaseModel):
+    challenge_token: str
+    code: str
+
+
+class TwoFactorConfirmResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    recovery_codes: list[str]
+
+
+class TwoFactorCodeRequest(BaseModel):
+    code: str
+
+
+class TwoFactorStatus(BaseModel):
+    enabled: bool
+    required: bool
+    enabled_at: str | None = None
+    recovery_codes_left: int = 0
 
 
 class TokenData(BaseModel):
@@ -49,8 +105,8 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def password_length(cls, v: str) -> str:
-        if len(v) < 6:
-            raise ValueError("Passwort muss mindestens 6 Zeichen haben")
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f"Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen haben")
         return v
 
 

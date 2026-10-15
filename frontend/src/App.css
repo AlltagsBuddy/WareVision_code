@@ -970,3 +970,27 @@ a.btn-primary {
   text-overflow: ellipsis;
   text-align: left;
 }
+
+/* Anmeldung: Textlinks als Buttons, Wiederherstellungscodes */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+.recovery-codes {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 1rem;
+  font-size: 1rem;
+}
+.recovery-codes code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.05em;
+}

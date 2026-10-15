@@ -27,7 +27,7 @@ class UserCreate(BaseModel):
     email: str
     first_name: str
     last_name: str
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=10)
     role_id: UUID
     permissions: Optional[Dict[str, Any]] = None
 
@@ -40,7 +40,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     role_id: Optional[UUID] = None
     is_active: Optional[bool] = None
-    password: Optional[str] = Field(None, min_length=6)
+    password: Optional[str] = Field(None, min_length=10)
     permissions: Optional[Dict[str, Any]] = None
 
 
@@ -57,6 +57,7 @@ class UserRead(BaseModel):
     last_login_at: Optional[datetime] = None
     created_at: datetime
     permissions: Optional[Dict[str, Any]] = None
+    totp_enabled: bool = False
 
     class Config:
         from_attributes = True

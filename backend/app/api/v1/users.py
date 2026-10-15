@@ -30,6 +30,7 @@ def _user_to_read(user: User) -> dict:
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
         "permissions": permissions,
+        "totp_enabled": bool(user.totp_enabled),
     }
 
 
@@ -139,3 +140,29 @@ def deactivate_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
     user.is_active = False
     db.commit()
+
+
+@router.post("/{user_id}/reset-2fa", response_model=UserRead)
+def reset_two_factor(
+    user_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin)],
+) -> dict:
+    """Zwei-Faktor eines Benutzers zurücksetzen (z. B. Handy verloren). Bei der nächsten Anmeldung
+    richtet er sie neu ein."""
+    from app.services.audit import log_audit
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
+    user.totp_enabled = False
+    user.totp_secret = None
+    user.totp_pending_secret = None
+    user.totp_last_counter = None
+    user.totp_enabled_at = None
+    user.recovery_codes = None
+    log_audit(db, user_id=current_user.id, entity_type="user", entity_id=user.id, action="2fa_reset",
+              new_values={"email": user.email})
+    db.commit()
+    db.refresh(user)
+    return _user_to_read(user)

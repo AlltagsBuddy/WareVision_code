@@ -22,8 +22,8 @@ export default function Register() {
       setError('Passwörter stimmen nicht überein.')
       return
     }
-    if (form.password.length < 6) {
-      setError('Passwort muss mindestens 6 Zeichen haben.')
+    if (form.password.length < 10) {
+      setError('Passwort muss mindestens 10 Zeichen haben.')
       return
     }
     setLoading(true)
@@ -105,8 +105,8 @@ export default function Register() {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
-              minLength={6}
-              placeholder="Mind. 6 Zeichen"
+              minLength={10}
+              placeholder="Mind. 10 Zeichen"
             />
           </div>
           <div className="form-group">

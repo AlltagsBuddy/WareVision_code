@@ -34,7 +34,7 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
-    to_encode = {"sub": str(subject), "exp": expire}
+    to_encode = {"sub": str(subject), "exp": expire, "typ": "access"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -44,6 +44,9 @@ def decode_access_token(token: str) -> Optional[str]:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+        # Zwischentokens der Zwei-Faktor-Anmeldung sind keine Zugangstokens
+        if payload.get("purpose") or payload.get("typ", "access") != "access":
+            return None
         return payload.get("sub")
     except JWTError:
         return None

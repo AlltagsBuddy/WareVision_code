@@ -43,7 +43,10 @@ const WERKSTATT_USER = {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  // resetAllMocks verwirft auch nicht verbrauchte Einmal-Antworten (mockResolvedValueOnce) aus vorherigen Tests
+  vi.resetAllMocks()
+  // Standard: /auth/me liefert den Admin (der Hook ruft me() nach dem Login ein zweites Mal über den Token-Effekt auf)
+  mockAuthApi.me.mockResolvedValue(ADMIN_USER)
   localStorage.clear()
 })
 
@@ -149,5 +152,26 @@ describe('useAuth – canView / canWrite', () => {
     const { result } = renderHook(() => useAuth())
     expect(result.current.canView('customers')).toBe(false)
     expect(result.current.canWrite('customers')).toBe(false)
+  })
+})
+
+describe('useAuth – Zwei-Faktor', () => {
+  it('liefert den 2FA-Schritt ohne Token zu speichern', async () => {
+    mockAuthApi.login.mockResolvedValueOnce({ access_token: null, two_factor_required: true, two_factor_setup_required: false, challenge_token: 'ch' })
+    const { result } = renderHook(() => useAuth())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    let step: unknown
+    await act(async () => { step = await result.current.login('a@b.de', 'langespasswort') })
+    expect(step).toEqual({ step: '2fa', challenge: 'ch' })
+    expect(localStorage.getItem('token')).toBeNull()
+  })
+
+  it('liefert den Einrichtungsschritt', async () => {
+    mockAuthApi.login.mockResolvedValueOnce({ access_token: null, two_factor_required: false, two_factor_setup_required: true, challenge_token: 'ch2' })
+    const { result } = renderHook(() => useAuth())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    let step: unknown
+    await act(async () => { step = await result.current.login('a@b.de', 'langespasswort') })
+    expect(step).toEqual({ step: 'setup', challenge: 'ch2' })
   })
 })

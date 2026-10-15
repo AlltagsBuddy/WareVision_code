@@ -12,6 +12,9 @@ alembic==1.13.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.3.0
+# Zwei-Faktor-Anmeldung (TOTP) und QR-Code
+pyotp==2.9.0
+segno==1.6.1
 
 # Validation & Config
 pydantic==2.6.1

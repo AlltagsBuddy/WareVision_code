@@ -74,3 +74,8 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Server: Sicherungen und Umzugsdateien enthalten Kundendaten – nie einchecken
+backups/
+*.dump
+dateien.tar.gz

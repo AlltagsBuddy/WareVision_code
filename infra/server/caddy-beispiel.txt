@@ -1,0 +1,14 @@
+# Beispiel für einen VORHANDENEN Caddy auf dem Server (Variante B).
+# In die vorhandene Caddyfile einfügen, Domain und Port (HTTP_PORT aus der .env) anpassen,
+# dann Caddy neu laden (z. B. sudo systemctl reload caddy). Das Zertifikat holt Caddy selbst.
+
+quadparadies.warevision.de {
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy 127.0.0.1:8080
+}
+
+# Läuft der vorhandene Caddy selbst in Docker, ist 127.0.0.1 der Caddy-Container.
+# Dann stattdessen  reverse_proxy host.docker.internal:8080  verwenden und im Caddy-Container
+#   extra_hosts: ["host.docker.internal:host-gateway"]  ergänzen
+# – oder WareVision mit eingebautem Caddy betreiben (Variante A).

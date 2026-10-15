@@ -8,13 +8,20 @@ import Login from './Login'
 
 // useAuth mocken
 const mockLogin = vi.fn()
+const mockComplete = vi.fn()
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({
     login: mockLogin,
+    completeLogin: mockComplete,
     user: null,
     token: null,
     loading: false,
   }),
+}))
+
+const auth = { verifyTwoFactor: vi.fn(), startTwoFactorSetup: vi.fn(), confirmTwoFactorSetup: vi.fn() }
+vi.mock('../api/client', () => ({
+  authApi: new Proxy({}, { get: (_t, k: string) => (...a: unknown[]) => (auth as any)[k](...a) }),
 }))
 
 // useNavigate mocken
@@ -76,7 +83,7 @@ describe('Login – Formular-Interaktion', () => {
   })
 
   it('ruft login() mit E-Mail und Passwort auf', async () => {
-    mockLogin.mockResolvedValueOnce(undefined)
+    mockLogin.mockResolvedValueOnce({ step: 'ok' })
     renderLogin()
 
     fireEvent.change(screen.getByLabelText('E-Mail'), { target: { value: 'user@test.de' } })
@@ -87,7 +94,7 @@ describe('Login – Formular-Interaktion', () => {
   })
 
   it('navigiert nach / nach erfolgreichem Login', async () => {
-    mockLogin.mockResolvedValueOnce(undefined)
+    mockLogin.mockResolvedValueOnce({ step: 'ok' })
     renderLogin()
 
     fireEvent.change(screen.getByLabelText('E-Mail'), { target: { value: 'admin@test.de' } })
@@ -113,8 +120,8 @@ describe('Login – Fehlerzustände', () => {
   })
 
   it('deaktiviert Button während des Ladens', async () => {
-    let resolve: () => void
-    mockLogin.mockReturnValueOnce(new Promise<void>(r => { resolve = r }))
+    let resolve: (v: unknown) => void
+    mockLogin.mockReturnValueOnce(new Promise(r => { resolve = r }))
     renderLogin()
 
     fireEvent.change(screen.getByLabelText('E-Mail'), { target: { value: 'a@b.de' } })
@@ -124,11 +131,70 @@ describe('Login – Fehlerzustände', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Anmelden...' })).toBeDisabled()
     )
-    resolve!()
+    resolve!({ step: 'ok' })
   })
 
   it('zeigt keine Fehlermeldung im Normalzustand', () => {
     renderLogin()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('Login – Zwei-Faktor', () => {
+  const submitPassword = () => {
+    fireEvent.change(screen.getByLabelText('E-Mail'), { target: { value: 'chef@firma.de' } })
+    fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'langespasswort' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
+  }
+
+  it('fragt nach dem Code und meldet an', async () => {
+    mockLogin.mockResolvedValueOnce({ step: '2fa', challenge: 'ch1' })
+    auth.verifyTwoFactor.mockResolvedValueOnce({ access_token: 'tok' })
+    renderLogin()
+    submitPassword()
+    fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
+    await waitFor(() => expect(auth.verifyTwoFactor).toHaveBeenCalledWith('ch1', { code: '123456' }))
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledWith('tok'))
+    expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  it('falscher Code: Meldung, Eingabe bleibt möglich', async () => {
+    mockLogin.mockResolvedValueOnce({ step: '2fa', challenge: 'ch1' })
+    auth.verifyTwoFactor.mockRejectedValueOnce(new Error('Code ist falsch oder abgelaufen.'))
+    renderLogin()
+    submitPassword()
+    fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '000000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
+    expect(await screen.findByText('Code ist falsch oder abgelaufen.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Code')).toBeInTheDocument()
+    expect(mockComplete).not.toHaveBeenCalled()
+  })
+
+  it('Wiederherstellungscode statt App-Code', async () => {
+    mockLogin.mockResolvedValueOnce({ step: '2fa', challenge: 'ch1' })
+    auth.verifyTwoFactor.mockResolvedValueOnce({ access_token: 'tok' })
+    renderLogin()
+    submitPassword()
+    fireEvent.click(await screen.findByRole('button', { name: /Wiederherstellungscode/ }))
+    fireEvent.change(screen.getByLabelText('Wiederherstellungscode'), { target: { value: 'ABCDE-FGHJK' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
+    await waitFor(() => expect(auth.verifyTwoFactor).toHaveBeenCalledWith('ch1', { recovery_code: 'ABCDE-FGHJK' }))
+  })
+
+  it('Einrichtung: QR-Code, Code bestätigen, Wiederherstellungscodes zeigen', async () => {
+    mockLogin.mockResolvedValueOnce({ step: 'setup', challenge: 'ch2' })
+    auth.startTwoFactorSetup.mockResolvedValueOnce({ secret: 'ABCSECRET', otpauth_uri: 'otpauth://x', qr_data_uri: 'data:image/svg+xml;charset=utf-8,%3Csvg%3E', account: 'chef@firma.de' })
+    auth.confirmTwoFactorSetup.mockResolvedValueOnce({ access_token: 'tok2', recovery_codes: ['AAAAA-BBBBB', 'CCCCC-DDDDD'] })
+    renderLogin()
+    submitPassword()
+    expect(await screen.findByAltText('QR-Code für die Authenticator-App')).toHaveAttribute('src', expect.stringMatching(/^data:image\/svg\+xml/))
+    fireEvent.change(screen.getByLabelText('Code aus der App'), { target: { value: '654321' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Einrichten' }))
+    expect(await screen.findByText('AAAAA-BBBBB')).toBeInTheDocument()
+    expect(mockComplete).not.toHaveBeenCalled()  // erst nach Bestätigung der Sicherung
+    fireEvent.click(screen.getByRole('button', { name: /Codes gesichert/ }))
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledWith('tok2'))
+    expect(mockNavigate).toHaveBeenCalledWith('/')
   })
 })

@@ -14,6 +14,11 @@ from app.core.limiter import limiter
 
 settings = get_settings()
 
+# Auf dem Server nicht mit unsicheren Einstellungen starten
+_problems = settings.production_problems()
+if _problems:
+    raise RuntimeError("WareVision startet nicht – unsichere Einstellungen: " + " ".join(_problems))
+
 # Sentry initialisieren wenn DSN konfiguriert
 if settings.SENTRY_DSN:
     import sentry_sdk
@@ -40,8 +45,10 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    # API-Dokumentation nur lokal, nicht öffentlich auf dem Server
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 app.state.limiter = limiter
@@ -87,6 +94,9 @@ def health():
         checks["redis"] = f"error: {exc}"
         overall = "degraded"
 
+    if settings.is_production:
+        # Öffentlich erreichbar: keine technischen Details preisgeben
+        checks = {k: ("ok" if v == "ok" else "error") for k, v in checks.items()}
     return {
         "status": overall,
         "app": settings.APP_NAME,
@@ -99,4 +109,4 @@ def health():
 @app.get("/")
 def root():
     """Root endpoint."""
-    return {"message": "WareVision API", "docs": "/docs"}
+    return {"message": "WareVision API"} if settings.is_production else {"message": "WareVision API", "docs": "/docs"}
