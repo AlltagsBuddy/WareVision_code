@@ -84,6 +84,7 @@ WareVision_code/
 | Artikel: Teile-Hersteller, Suche OEM/Lief.-Nr., Filter „passend für Modell“, „Passende Teile“ am Fahrzeug | ✅ | ✅ |
 | Suche in Terminen, Benutzern, Audit-Log und Buchhaltung | ✅ | ✅ |
 | Zwei-Faktor-Anmeldung (TOTP, Wiederherstellungscodes, Admin-Reset; Pflicht auf dem Server) | ✅ | ✅ |
+| Rollen & Rechte (Admin, Chef/Chefin, Büro, Werkstatt, Mitarbeiter; Bereiche sehen/ändern, Sonderrechte; serverseitig in `core/permissions.py` + `module_guard`) | ✅ | ✅ |
 | Server-Betrieb Hetzner (docker-compose.prod.yml, https/Caddy, Härtung, PWA) – docs/ANLEITUNG_SERVER.md | ✅ | ✅ |
 | Storno → Auftrag korrigieren → neue Rechnung (Verweis Rechnungsposition ON DELETE SET NULL) | ✅ | ✅ |
 | Dokumentenmanagement | ✅ | ✅ |

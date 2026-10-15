@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { customersApi, vehiclesApi } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { hasRight } from '../utils/permissions'
 
 export default function Customers() {
   const { user } = useAuth()
@@ -756,15 +757,15 @@ export default function Customers() {
                     <button type="button" onClick={() => openEdit(c)} className="btn-secondary btn-sm">
                       Bearbeiten
                     </button>
-                    {user?.role_name === 'admin' && (
-                      <>
-                        <button type="button" onClick={() => handleExport(c)} className="btn-secondary btn-sm">
-                          Export
-                        </button>
-                        <button type="button" onClick={() => handleDsgvoDelete(c)} className="btn-secondary btn-sm">
-                          DSGVO: Löschen
-                        </button>
-                      </>
+                    {hasRight(user, 'dsgvo_export') && (
+                      <button type="button" onClick={() => handleExport(c)} className="btn-secondary btn-sm">
+                        Export
+                      </button>
+                    )}
+                    {hasRight(user, 'dsgvo_delete') && (
+                      <button type="button" onClick={() => handleDsgvoDelete(c)} className="btn-secondary btn-sm">
+                        DSGVO: Löschen
+                      </button>
                     )}
                     {c.is_active && (
                       <button type="button" onClick={() => handleDelete(c)} className="btn-secondary btn-sm">

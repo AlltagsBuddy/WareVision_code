@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.document import Document
@@ -30,7 +30,7 @@ from app.schemas.maintenance import (
 ALLOWED_DOCUMENT_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 MAX_DOCUMENT_SIZE = 20 * 1024 * 1024  # 20 MB
 
-router = APIRouter(prefix="/maintenance-plans", tags=["maintenance-plans"])
+router = APIRouter(prefix="/maintenance-plans", tags=["maintenance-plans"], dependencies=[Depends(module_guard("maintenance_plans"))])
 
 
 @router.get("", response_model=list[MaintenancePlanRead])
@@ -70,7 +70,7 @@ def get_plan_for_vehicle(
 def create_maintenance_plan(
     payload: MaintenancePlanCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenancePlanRead:
     """Create maintenance plan."""
     plan = MaintenancePlan(
@@ -111,7 +111,7 @@ def update_maintenance_plan(
     plan_id: UUID,
     payload: MaintenancePlanUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenancePlanRead:
     """Wartungsplan aktualisieren."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
@@ -150,7 +150,7 @@ def update_maintenance_plan(
 def delete_maintenance_plan(
     plan_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
     """Delete maintenance plan."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
@@ -193,7 +193,7 @@ def create_maintenance_task(
     plan_id: UUID,
     payload: MaintenanceTaskCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenanceTask:
     """Add task to maintenance plan."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
@@ -223,7 +223,7 @@ def update_maintenance_task(
     task_id: UUID,
     payload: MaintenanceTaskUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenanceTaskRead:
     """Wartungsaufgabe aktualisieren (z. B. Artikel zuweisen)."""
     task = (
@@ -265,7 +265,7 @@ def delete_maintenance_task(
     plan_id: UUID,
     task_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
     """Remove task from maintenance plan."""
     task = (
@@ -290,7 +290,7 @@ async def upload_plan_document(
     plan_id: UUID,
     file: Annotated[UploadFile, File()],
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenancePlanRead:
     """Hersteller-Dokument (PDF) an Wartungsplan anhängen. Ersetzt ein vorhandenes Dokument."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()
@@ -346,7 +346,7 @@ async def upload_plan_document(
 def delete_plan_document(
     plan_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
     """Dokument vom Wartungsplan entfernen und Datei löschen."""
     plan = db.query(MaintenancePlan).filter(MaintenancePlan.id == plan_id).first()

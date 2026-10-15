@@ -1,4 +1,4 @@
-# Einstellungen (nur Admin)
+# Einstellungen (Administrator, Chef/Chefin)
 
 ## Firmendaten
 Firmenname, Adresse, USt-IdNr., Logo (PNG/JPG/WebP, max. 2 MB), E-Mail, Telefon und Website erscheinen auf Rechnungen, Angeboten und PDFs. Die Adresse bitte so eintragen: Zeile 1 Straße und Hausnummer, Zeile 2 „PLZ Ort“ – das wird für die E-Rechnung ausgewertet.

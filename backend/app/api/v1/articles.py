@@ -6,14 +6,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_right
 from app.core.database import get_db
 from app.models.article import Article
 from app.models.manufacturer import VehicleModel
 from app.models.user import User
 from app.schemas.article import ArticleCreate, ArticleRead, ArticleUpdate
 
-router = APIRouter(prefix="/articles", tags=["articles"])
+router = APIRouter(prefix="/articles", tags=["articles"], dependencies=[Depends(module_guard("articles"))])
 
 
 @router.get("", response_model=list[ArticleRead])
@@ -162,7 +162,7 @@ def update_article(
 def delete_article(
     article_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> None:
     """Soft delete article (deactivate)."""
     article = db.query(Article).filter(Article.id == article_id).first()

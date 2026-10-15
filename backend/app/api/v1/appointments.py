@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, module_guard
 from app.core.database import get_db
 from app.models.appointment import Appointment
 from app.models.app_setting import AppSetting
@@ -29,7 +29,7 @@ from app.services.termin_marktplatz import resolve_appointment_type_for_terminma
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/appointments", tags=["appointments"])
+router = APIRouter(prefix="/appointments", tags=["appointments"], dependencies=[Depends(module_guard("appointments"))])
 
 _BERLIN_TZ = ZoneInfo("Europe/Berlin")
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { purchaseOrdersApi, suppliersApi, articlesApi } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import PreviewModal from '../components/PreviewModal'
+import { hasRight } from '../utils/permissions'
 
 interface ItemForm {
   article_id: string
@@ -104,7 +105,8 @@ const progress = (o: any) => {
 
 export default function PurchaseOrders() {
   const { user } = useAuth()
-  const isAdmin = user?.role_name === 'admin'
+  // Bestellen (versenden) und stornieren: Sonderrecht „Lager & Einkauf“
+  const isAdmin = hasRight(user, 'lager_einkauf')
   const [tab, setTab] = useState<'orders' | 'suggestions'>('orders')
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -740,7 +742,7 @@ export default function PurchaseOrders() {
               )}
             </div>
             {!isAdmin && detail.status === 'draft' && (
-              <p className="muted" style={{ fontSize: '0.85rem' }}>Bestellen (E-Mail senden) darf nur ein Administrator.</p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Bestellen (E-Mail senden) braucht das Recht „Lager & Einkauf“.</p>
             )}
           </div>
         </div>

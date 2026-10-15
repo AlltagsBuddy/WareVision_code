@@ -161,7 +161,7 @@ describe('Bestellungen – Wareneingang und Rechte', () => {
     fireEvent.click(await screen.findByText('BE-2026-0001'))
     expect(screen.queryByRole('button', { name: 'Als bestellt markieren' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Per E-Mail senden' })).not.toBeInTheDocument()
-    expect(screen.getByText(/nur ein Administrator/)).toBeInTheDocument()
+    expect(screen.getByText(/Lager & Einkauf/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Schließen' }))
     fireEvent.click(await screen.findByText('BE-2026-0002'))
     expect(screen.getByRole('button', { name: 'Wareneingang' })).toBeInTheDocument()

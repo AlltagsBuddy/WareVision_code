@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_right
 from app.core.database import get_db
 from app.models.article import Article
 from app.models.purchase_order import OPEN_STATUSES, PurchaseOrder, PurchaseOrderItem
@@ -32,7 +32,7 @@ from app.services.stock_booking import apply_stock_change
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"])
+router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"], dependencies=[Depends(module_guard("purchase_orders"))])
 
 _CENT = Decimal("0.01")
 NO_SUPPLIER_LABEL = "Ohne Lieferant"
@@ -306,7 +306,7 @@ def delete_purchase_order(
 def mark_purchase_order_sent(
     order_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> PurchaseOrder:
     """Als bestellt markieren (z. B. telefonisch oder im Online-Shop bestellt)."""
     order = _get_order(db, order_id)
@@ -349,7 +349,7 @@ def send_purchase_order_email(
     order_id: UUID,
     payload: PurchaseOrderSendEmailIn,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> PurchaseOrder:
     """Bestellung per E-Mail an den Lieferanten senden. Ein Entwurf wird dabei auf „bestellt“ gesetzt."""
     from app.models.app_setting import AppSetting
@@ -494,7 +494,7 @@ def receive_goods(
 def cancel_purchase_order(
     order_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> PurchaseOrder:
     """Bestellung stornieren. Wurde schon etwas geliefert, wird sie abgeschlossen (Rest kommt nicht mehr)."""
     order = _get_order(db, order_id)

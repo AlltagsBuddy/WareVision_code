@@ -86,7 +86,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  me: () => api<{ id: string; email: string; first_name: string; last_name: string; role_name: string }>('/auth/me'),
+  me: () => api<{
+    id: string; email: string; first_name: string; last_name: string; role_name: string
+    role_label?: string; is_manager?: boolean; is_active?: boolean; permissions?: Record<string, any>
+  }>('/auth/me'),
   exportMyData: () => api<Record<string, unknown>>('/auth/me/export'),
   changePassword: (current_password: string, new_password: string) =>
     api<{ message: string }>('/auth/change-password', {
@@ -198,6 +201,8 @@ export const auditApi = {
 export const usersApi = {
   list: () => api<any[]>('/users'),
   roles: () => api<any[]>('/users/roles'),
+  permissionCatalog: () =>
+    api<{ modules: { key: string; label: string }[]; rights: { key: string; label: string }[] }>('/users/permission-catalog'),
   create: (data: Record<string, unknown>) =>
     api<any>('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Record<string, unknown>) =>

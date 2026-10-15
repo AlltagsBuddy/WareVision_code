@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, module_guard
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.workshop_order_photo import WorkshopOrderPhoto
@@ -37,7 +37,7 @@ from app.services.stock_booking import (
     release_stock_for_cancelled_workshop_order,
 )
 
-router = APIRouter(prefix="/workshop-orders", tags=["workshop-orders"])
+router = APIRouter(prefix="/workshop-orders", tags=["workshop-orders"], dependencies=[Depends(module_guard("workshop_orders"))])
 
 
 def _next_order_number(db: Session) -> str:

@@ -3,6 +3,8 @@ import { useSearchParams, useLocation } from 'react-router-dom'
 import { invoicesApi, customersApi, workshopOrdersApi } from '../api/client'
 import PreviewModal from '../components/PreviewModal'
 import InvoiceCorrectionModal from '../components/InvoiceCorrectionModal'
+import { useAuth } from '../hooks/useAuth'
+import { hasRight } from '../utils/permissions'
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Entwurf',
@@ -24,6 +26,9 @@ const statusLabel = (inv: any) => {
 }
 
 export default function Invoices() {
+  const { user } = useAuth()
+  // Anlegen, Ausstellen, Bezahlt, Storno, Korrektur: Sonderrecht „Rechnungen“ (der Server prüft das ebenfalls)
+  const canManage = hasRight(user, 'invoices_manage')
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const workshopOrderIdFromState = (location.state as { workshopOrderId?: string })?.workshopOrderId
@@ -436,9 +441,13 @@ export default function Invoices() {
         </label>
         {zugferdImportError && <span className="error" style={{ fontSize: '0.85rem' }}>{zugferdImportError}</span>}
         {reminderError && <span className="error" style={{ fontSize: '0.85rem' }}>{reminderError}</span>}
-        <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
-          + Neue Rechnung
-        </button>
+        {canManage ? (
+          <button type="button" onClick={() => setShowForm(true)} className="btn-primary">
+            + Neue Rechnung
+          </button>
+        ) : (
+          <span className="muted" style={{ fontSize: '0.85rem' }}>Rechnungen anlegen und ausstellen braucht das Recht „Rechnungen“.</span>
+        )}
       </div>
 
       {showForm && (

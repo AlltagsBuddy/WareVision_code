@@ -10,7 +10,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_right
 from app.core.database import get_db
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.workshop_order import WorkshopOrder, WorkshopOrderItem
@@ -46,7 +46,7 @@ def _recalc_totals(db: Session, inv: Invoice) -> None:
     inv.vat_amount = vat
     inv.gross_amount = net + vat
 
-router = APIRouter(prefix="/invoices", tags=["invoices"])
+router = APIRouter(prefix="/invoices", tags=["invoices"], dependencies=[Depends(module_guard("invoices"))])
 
 
 def _integrity_http(exc: Exception) -> HTTPException:
@@ -142,7 +142,7 @@ def list_invoices(
 def create_invoice(
     payload: InvoiceCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("invoices_manage"))],
 ) -> Invoice:
     """Create invoice. If workshop_order_id given, items are copied from the order."""
     invoice_number = _next_invoice_number(db)
@@ -367,7 +367,7 @@ def get_reminder_pdf(
 def mark_invoice_paid(
     invoice_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("invoices_manage"))],
 ) -> Invoice:
     """Set invoice status to paid."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -389,7 +389,7 @@ def mark_invoice_paid(
 def issue_invoice(
     invoice_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("invoices_manage"))],
 ) -> Invoice:
     """Set invoice status to issued."""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -418,7 +418,7 @@ def cancel_invoice(
     invoice_id: UUID,
     reason: str = Body(default="", embed=True),
     db: Annotated[Session, Depends(get_db)] = None,
-    current_user: Annotated[User, Depends(require_admin)] = None,
+    current_user: Annotated[User, Depends(require_right("invoices_manage"))] = None,
 ) -> Invoice:
     """GoBD-konforme Stornierung: Erstellt eine Stornorechnung mit negativen Beträgen.
     Die Originalrechnung wird als 'cancelled' markiert und referenziert die Stornorechnung.
@@ -678,7 +678,7 @@ def create_correction(
     invoice_id: UUID,
     payload: InvoiceCorrectionIn,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("invoices_manage"))],
 ) -> Invoice:
     """Rechnungskorrektur (Gutschrift) erstellen: einzelne Positionen/Mengen und/oder ein Preisnachlass.
 

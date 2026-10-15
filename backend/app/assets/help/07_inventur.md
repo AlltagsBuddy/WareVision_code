@@ -1,6 +1,6 @@
 # Inventur
 
-## Inventur starten (nur Admin)
+## Inventur starten (Recht „Lager & Einkauf“)
 „+ Neue Inventur“: Stichtag wählen, optional nur einen Lagerort oder eine Kategorie. Alle aktiven Artikel im Umfang kommen auf die Zählliste. Es kann immer nur eine Inventur gleichzeitig offen sein.
 
 ## Zählliste drucken
@@ -12,7 +12,7 @@ Ist-Menge eintragen und mit Enter bestätigen – der Cursor springt zur nächst
 ## Weiterarbeiten während der Inventur
 Während der Inventur kann normal gebucht werden. Der Sollbestand wird im Moment der Zählung festgehalten; Buchungen davor und danach werden beim Abschluss korrekt berücksichtigt.
 
-## Abschließen (nur Admin)
+## Abschließen (Recht „Lager & Einkauf“)
 „Inventur abschließen“ ist erst möglich, wenn alle Artikel gezählt sind. Differenzen werden als Lagerkorrektur mit Verweis auf die Inventurnummer gebucht. Danach ist die Inventur unveränderbar. „Abbrechen“ beendet eine offene Inventur ohne Buchung.
 
 ## Ergebnis

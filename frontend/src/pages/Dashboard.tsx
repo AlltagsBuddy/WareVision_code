@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { dashboardApi } from '../api/client'
+import { isManager } from '../utils/permissions'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -87,7 +88,7 @@ export default function Dashboard() {
           <h3>Wartungspläne</h3>
           <p>{stats?.maintenance_plans ?? '–'}</p>
         </Link>
-        {user?.role_name === 'admin' && (
+        {isManager(user) && (
           <Link to="/users" className="card">
             <h3>Benutzer</h3>
             <p>Anlegen &amp; verwalten</p>

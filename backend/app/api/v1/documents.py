@@ -15,7 +15,7 @@ from app.services.ocr import extract_text_from_file
 from app.services.audit import log_audit
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_admin
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.document import Document
@@ -24,7 +24,7 @@ from app.schemas.document import DocumentRead, DocumentAssign
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(module_guard("documents"))])
 
 
 def _doc_to_read(doc: Document) -> DocumentRead:

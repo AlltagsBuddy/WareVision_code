@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { authApi } from '../api/client'
+import { canView as viewOf, canWrite as writeOf, hasRight as rightOf, isManager as managerOf, type Right } from '../utils/permissions'
 
 export type ModulePermission = { visible: boolean; write: boolean }
-export type UserPermissions = Record<string, ModulePermission>
+export type UserPermissions = Record<string, any>
 
 export type AuthUser = {
   id?: string
@@ -10,6 +11,8 @@ export type AuthUser = {
   first_name: string
   last_name: string
   role_name: string
+  role_label?: string
+  is_manager?: boolean
   is_active?: boolean
   permissions?: UserPermissions
 }
@@ -66,25 +69,12 @@ export function useAuth() {
     setUser(null)
   }
 
-  /**
-   * Prueft ob der aktuelle Benutzer ein Modul sehen darf.
-   * Admins duerfen immer alles sehen.
-   */
-  const canView = (module: string): boolean => {
-    if (!user) return false
-    if (user.role_name === 'admin') return true
-    return user.permissions?.[module]?.visible !== false
-  }
+  /** Bereich sehen bzw. ändern; Admin und Chef/Chefin dürfen alles. */
+  const canView = (module: string): boolean => viewOf(user, module)
+  const canWrite = (module: string): boolean => writeOf(user, module)
+  /** Sonderrecht (Rechnungen, Buchhaltung, DSGVO, Lager & Einkauf) */
+  const hasRight = (right: Right): boolean => rightOf(user, right)
+  const isManager = managerOf(user)
 
-  /**
-   * Prueft ob der aktuelle Benutzer in ein Modul schreiben darf.
-   * Admins duerfen immer schreiben.
-   */
-  const canWrite = (module: string): boolean => {
-    if (!user) return false
-    if (user.role_name === 'admin') return true
-    return user.permissions?.[module]?.write !== false
-  }
-
-  return { token, user, loading, login, completeLogin, logout, canView, canWrite }
+  return { token, user, loading, login, completeLogin, logout, canView, canWrite, hasRight, isManager }
 }

@@ -21,13 +21,13 @@ def init_roles_and_admin(db, reset_admin: bool = False):
 
     werkstatt_role = db.query(Role).filter(Role.name == "werkstatt").first()
     if not werkstatt_role:
-        werkstatt_role = Role(name="werkstatt", description="Werkstatt-Mitarbeiter")
+        werkstatt_role = Role(name="werkstatt", description="Werkstatt")
         db.add(werkstatt_role)
         db.flush()
 
     for role_name, role_desc in [
-        ("buero", "Buero"),
-        ("geschaeftsfuehrung", "Geschaeftsfuehrung"),
+        ("chef", "Chef/Chefin"),
+        ("buero", "Büro"),
         ("mitarbeiter", "Mitarbeiter"),
     ]:
         if not db.query(Role).filter(Role.name == role_name).first():

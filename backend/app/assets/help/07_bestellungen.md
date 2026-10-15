@@ -6,13 +6,13 @@ Reiter „Bestellvorschlag“ zeigt, was du nachbestellen musst. Hier stehen all
 ## Bestellung anlegen
 „+ Neue Bestellung“: Lieferant, Bestelldatum und optional einen gewünschten Liefertermin wählen. Je Position einen Artikel wählen (Bezeichnung, Lieferanten-Artikelnummer und Einkaufspreis werden übernommen) oder eine freie Position eintragen, z. B. Versandkosten. Mengen nur in ganzen Stück. Freie Positionen werden nicht ins Lager gebucht. Entwürfe können bearbeitet und gelöscht werden.
 
-## Bestellen (nur Admin)
+## Bestellen (Recht „Lager & Einkauf“)
 „Per E-Mail senden“ schickt die Bestellung als PDF an die E-Mail-Adresse des Lieferanten (oder an einen anderen Empfänger) und setzt den Status auf „Bestellt“. Wurde telefonisch oder im Online-Shop bestellt, nutze „Als bestellt markieren“. Auf dem PDF stehen deine Kundennummer beim Lieferanten, die Lieferanten-Artikelnummern, der Liefertermin und die Bitte, die Bestellnummer auf Lieferschein und Rechnung anzugeben. Bestellte Bestellungen können nicht mehr geändert werden.
 
 ## Wareneingang
 Kommt die Ware, öffne die Bestellung und klicke „Wareneingang“. Die offenen Mengen sind vorbelegt; bei einer Teillieferung trägst du die tatsächlich gelieferte Menge ein. Optional die Lieferschein-Nummer eintragen und „Bestellpreis als neuen EK-Preis im Artikel übernehmen“ anhaken. „Wareneingang buchen“ bucht Lagerartikel sofort als Zugang ins Lager (mit Verweis auf die Bestellnummer). Status: „Teilweise geliefert“ oder „Geliefert“. Mehr als bestellt kann nicht gebucht werden; eine Mehrlieferung buchst du zusätzlich unter Lager als Zugang. Den Wareneingang darf jeder Benutzer buchen.
 
-## Stornieren (nur Admin)
+## Stornieren (Recht „Lager & Einkauf“)
 „Stornieren“ storniert eine bestellte Bestellung, von der noch nichts geliefert wurde. Nach einer Teillieferung heißt der Knopf „Rest stornieren“: Die Bestellung wird abgeschlossen und die Restmenge nicht mehr erwartet. Der Artikel erscheint dann bei Bedarf wieder im Bestellvorschlag.
 
 ## Liefertermin überwacht

@@ -13,6 +13,6 @@ Im Kunden-Detail („Detail“) kannst du mehrere Adressen hinterlegen: Hauptadr
 Über das Suchfeld findest du Kunden nach Name, Firma oder E-Mail. „Deaktivieren“ blendet einen Kunden aus, ohne Daten zu löschen. Mit „Deaktivierte anzeigen“ siehst du sie wieder.
 
 ## Datenschutz (DSGVO)
-- „Export“ (nur Admin) lädt alle gespeicherten Daten eines Kunden als Datei herunter (Auskunftsrecht, Art. 15 DSGVO).
+- „Export“ (Recht „DSGVO: Auskunft“) lädt alle gespeicherten Daten eines Kunden als Datei herunter (Auskunftsrecht, Art. 15 DSGVO).
 - „Datenschutz-Einwilligung“: Vorschau/Drucken als PDF oder „Digital unterschreiben“ mit Maus oder Finger.
-- „DSGVO: Löschen“ (nur Admin): Hat der Kunde Rechnungen oder Aufträge, werden seine Daten anonymisiert, weil Rechnungen aufbewahrt werden müssen (GoBD). Sonst wird er vollständig gelöscht. Kennzeichen und FIN seiner Fahrzeuge werden ebenfalls anonymisiert.
+- „DSGVO: Löschen“ (Recht „DSGVO: Löschen“): Hat der Kunde Rechnungen oder Aufträge, werden seine Daten anonymisiert, weil Rechnungen aufbewahrt werden müssen (GoBD). Sonst wird er vollständig gelöscht. Kennzeichen und FIN seiner Fahrzeuge werden ebenfalls anonymisiert.

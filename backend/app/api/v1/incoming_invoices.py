@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_right
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.incoming_invoice import IncomingInvoice
@@ -21,7 +21,7 @@ from app.schemas.incoming_invoice import IncomingInvoiceCreate, IncomingInvoiceR
 from app.services.audit import log_audit
 from app.services.einvoice_import import EInvoiceError, FORMAT_ZUGFERD, parse_einvoice
 
-router = APIRouter(prefix="/incoming-invoices", tags=["incoming-invoices"])
+router = APIRouter(prefix="/incoming-invoices", tags=["incoming-invoices"], dependencies=[Depends(require_right("accounting"))])
 
 _ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 _MAX_SIZE = 20 * 1024 * 1024  # 20 MB
@@ -72,7 +72,7 @@ def list_incoming_invoices(
 def create_incoming_invoice(
     payload: IncomingInvoiceCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
 ) -> IncomingInvoice:
     """Neue Eingangsrechnung anlegen."""
     inv = IncomingInvoice(
@@ -109,7 +109,7 @@ def create_incoming_invoice(
 async def import_einvoice(
     file: Annotated[UploadFile, File(...)],
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
 ) -> IncomingInvoice:
     """E-Rechnung (ZUGFeRD-PDF oder XRechnung-XML) importieren und als Eingangsrechnung speichern.
     Das Original wird unverändert archiviert und per SHA-256 gesichert (GoBD)."""
@@ -230,7 +230,7 @@ def update_incoming_invoice(
     invoice_id: UUID,
     payload: IncomingInvoiceUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
 ) -> IncomingInvoice:
     """Eingangsrechnung aktualisieren."""
     inv = db.query(IncomingInvoice).filter(IncomingInvoice.id == invoice_id).first()
@@ -266,7 +266,7 @@ def update_incoming_invoice(
 def delete_incoming_invoice(
     invoice_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
 ) -> None:
     """Eingangsrechnung löschen (inkl. PDF-Datei)."""
     inv = db.query(IncomingInvoice).filter(IncomingInvoice.id == invoice_id).first()
@@ -288,7 +288,7 @@ async def upload_pdf(
     invoice_id: UUID,
     file: Annotated[UploadFile, File(...)],
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
 ) -> IncomingInvoice:
     """PDF zur Eingangsrechnung hochladen."""
     inv = db.query(IncomingInvoice).filter(IncomingInvoice.id == invoice_id).first()

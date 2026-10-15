@@ -10,7 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_right
 from app.core.database import get_db
 from app.models.customer import Customer, CustomerAddress
 from app.models.user import User
@@ -22,7 +22,7 @@ from app.schemas.customer import (
     CustomerAddressCreate,
     CustomerAddressRead,
 )
-router = APIRouter(prefix="/customers", tags=["customers"])
+router = APIRouter(prefix="/customers", tags=["customers"], dependencies=[Depends(module_guard("customers"))])
 
 
 @router.get("", response_model=list[CustomerRead])
@@ -223,7 +223,7 @@ def delete_customer_address(
 def dsgvo_delete_customer(
     customer_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("dsgvo_delete"))],
 ) -> dict:
     """DSGVO Art. 17: Recht auf Löschung. Anonymisiert bei Rechnungen (GoBD), sonst endgültige Löschung."""
     from app.models.invoice import Invoice
@@ -369,7 +369,7 @@ def dsgvo_sign_and_save(
 def export_customer_data(
     customer_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("dsgvo_export"))],
 ) -> dict:
     """DSGVO: Export all customer data as JSON (admin only)."""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()

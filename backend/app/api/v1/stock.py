@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, module_guard
 from app.core.database import get_db
 from app.models.article import Article
 from app.models.stock_movement import StockMovement
@@ -21,7 +21,7 @@ from app.schemas.stock import (
     StockReservationStatusUpdate,
 )
 
-router = APIRouter(prefix="/stock", tags=["stock"])
+router = APIRouter(prefix="/stock", tags=["stock"], dependencies=[Depends(module_guard("stock"))])
 
 
 def _get_reserved_quantity(db: Session, article_id: UUID) -> int:

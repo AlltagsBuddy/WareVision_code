@@ -321,17 +321,18 @@ def get_current_user_info(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
     """Get current user info inklusive Modulberechtigungen."""
-    from app.schemas.user import DEFAULT_PERMISSIONS
+    from app.core.permissions import ROLE_LABELS, effective_permissions, is_manager
 
-    permissions = current_user.permissions if current_user.permissions is not None else DEFAULT_PERMISSIONS.copy()
     return UserResponse(
         id=str(current_user.id),
         email=current_user.email,
         first_name=current_user.first_name,
         last_name=current_user.last_name,
         role_name=current_user.role.name,
+        role_label=ROLE_LABELS.get(current_user.role.name, current_user.role.name),
+        is_manager=is_manager(current_user),
         is_active=current_user.is_active,
-        permissions=permissions,
+        permissions=effective_permissions(current_user),
     )
 
 

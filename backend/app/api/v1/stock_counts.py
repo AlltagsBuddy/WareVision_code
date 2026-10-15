@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_right
 from app.core.database import get_db
 from app.models.article import Article
 from app.models.article_category import ArticleCategory
@@ -28,7 +28,7 @@ from app.schemas.stock_count import (
 from app.services.audit import log_audit
 from app.services.stock_booking import apply_stock_change
 
-router = APIRouter(prefix="/stock-counts", tags=["stock-counts"])
+router = APIRouter(prefix="/stock-counts", tags=["stock-counts"], dependencies=[Depends(module_guard("stock_counts"))])
 
 _CENT = Decimal("0.01")
 
@@ -93,7 +93,7 @@ def list_stock_counts(
 def create_stock_count(
     payload: StockCountCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> dict:
     """Neue Inventur anlegen: alle aktiven Artikel im gewählten Umfang werden in die Zählliste übernommen."""
     if db.query(StockCount.id).filter(StockCount.status == "open").first():
@@ -207,7 +207,7 @@ def update_count_item(
 def complete_stock_count(
     count_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> dict:
     """Inventur abschließen: Differenzen als Lagerkorrektur buchen, danach unveränderbar (GoBD)."""
     sc = _get_count(db, count_id)
@@ -271,7 +271,7 @@ def complete_stock_count(
 def cancel_stock_count(
     count_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> dict:
     """Offene Inventur abbrechen (keine Lagerbuchung). Die Zählung bleibt zur Nachvollziehbarkeit erhalten."""
     sc = _get_count(db, count_id)

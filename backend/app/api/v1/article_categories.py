@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_right
 from app.core.database import get_db
 from app.models.article_category import ArticleCategory
 from app.models.user import User
@@ -32,7 +32,7 @@ def list_article_categories(
 def create_article_category(
     payload: ArticleCategoryCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> ArticleCategory:
     """Neue Artikelkategorie anlegen."""
     existing = db.query(ArticleCategory).filter(ArticleCategory.name == payload.name).first()
@@ -53,7 +53,7 @@ def update_article_category(
     category_id: UUID,
     payload: ArticleCategoryUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> ArticleCategory:
     """Artikelkategorie aktualisieren."""
     category = db.query(ArticleCategory).filter(ArticleCategory.id == category_id).first()
@@ -85,7 +85,7 @@ def update_article_category(
 def delete_article_category(
     category_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> None:
     """Artikelkategorie löschen. Artikel dieser Kategorie werden nicht gelöscht."""
     category = db.query(ArticleCategory).filter(ArticleCategory.id == category_id).first()

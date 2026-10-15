@@ -1,4 +1,4 @@
-# Buchhaltung (nur Admin)
+# Buchhaltung (Recht „Buchhaltung“)
 
 ## Zeitraum und Übersicht
 Zeitraum über die Schnellauswahl (z. B. Laufender Monat, Vormonat, Quartal, Jahr) oder Von/Bis wählen und „Rechnungen anzeigen“. Die Reiter zeigen Privatkunden (B2C), Händler (B2B) und Eingangsrechnungen. Das Suchfeld darüber filtert die geladenen Belege nach Nummer, Kunde, Lieferant, Kategorie oder Notiz; Summen beziehen sich auf die angezeigten Belege.

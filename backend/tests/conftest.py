@@ -91,7 +91,8 @@ def db(test_engine):
 def _seed_roles(db: Session) -> None:
     """Admin- und Werkstatt-Rolle einmalig in der Transaktion anlegen."""
     from app.models.role import Role
-    for name, desc in [("admin", "Administrator"), ("werkstatt", "Werkstatt")]:
+    for name, desc in [("admin", "Administrator"), ("chef", "Chef/Chefin"), ("buero", "Büro"),
+                       ("werkstatt", "Werkstatt"), ("mitarbeiter", "Mitarbeiter")]:
         if not db.query(Role).filter(Role.name == name).first():
             db.add(Role(name=name, description=desc))
     db.flush()

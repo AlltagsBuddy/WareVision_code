@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { settingsApi, tasksApi, healthApi, laborRatesApi } from '../api/client'
+import { isManager } from '../utils/permissions'
 
 export default function Settings() {
   const { user } = useAuth()
@@ -198,7 +199,7 @@ export default function Settings() {
       <h1>Einstellungen</h1>
       <p className="muted">Firmenangaben für Rechnungen und Dokumente.</p>
 
-      {user?.role_name === 'admin' && (
+      {isManager(user) && (
         <div className="card" style={{ maxWidth: 500, marginBottom: '1.5rem', padding: '1rem' }}>
           <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Benutzerverwaltung</h3>
           <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
@@ -699,8 +700,8 @@ export default function Settings() {
         </button>
       </form>
 
-      {user?.role_name === 'admin' && <SystemStatusPanel />}
-      {user?.role_name === 'admin' && <TasksPanel />}
+      {isManager(user) && <SystemStatusPanel />}
+      {isManager(user) && <TasksPanel />}
     </div>
   )
 }

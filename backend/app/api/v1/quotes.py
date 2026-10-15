@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, module_guard
 from app.core.database import get_db
 from app.models.article import Article
 from app.models.customer import Customer
@@ -25,7 +25,7 @@ from app.services.stock_booking import book_workshop_material_out
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/quotes", tags=["quotes"])
+router = APIRouter(prefix="/quotes", tags=["quotes"], dependencies=[Depends(module_guard("quotes"))])
 
 _CENT = Decimal("0.01")
 DEFAULT_VALIDITY_DAYS = 30

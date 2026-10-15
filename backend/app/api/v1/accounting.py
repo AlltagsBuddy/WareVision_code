@@ -13,7 +13,7 @@ from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin
+from app.api.deps import require_right
 from app.core.database import get_db
 from app.models.customer import Customer
 from app.models.incoming_invoice import IncomingInvoice
@@ -99,7 +99,7 @@ def export_accounting(
     date_from: date = Query(..., description="Startdatum (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Enddatum (YYYY-MM-DD)"),
     db: Annotated[Session, Depends(get_db)] = None,
-    _=Depends(require_admin),
+    _=Depends(require_right("accounting")),
 ) -> Response:
     """GoBD-konformes ZIP-Exportpaket, nach Konten getrennt:
     - ausgangsrechnungen_privat/  (B2C-Kunden)
@@ -333,7 +333,7 @@ def _settings_out(db: Session) -> dict:
 
 
 @router.get("/datev/settings")
-def get_datev_settings(db: Annotated[Session, Depends(get_db)], _=Depends(require_admin)) -> dict:
+def get_datev_settings(db: Annotated[Session, Depends(get_db)], _=Depends(require_right("accounting"))) -> dict:
     """DATEV-Einstellungen inkl. Kontenvorschlägen und offenen Punkten."""
     return _settings_out(db)
 
@@ -342,7 +342,7 @@ def get_datev_settings(db: Annotated[Session, Depends(get_db)], _=Depends(requir
 def update_datev_settings(
     payload: DatevSettingsIn,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("accounting"))],
 ) -> dict:
     """DATEV-Einstellungen speichern. Leere Konten = Vorschlag des Kontenrahmens."""
     values = payload.model_dump()
@@ -375,7 +375,7 @@ def datev_preview(
     date_to: date = Query(...),
     include_incoming: bool = True,
     db: Annotated[Session, Depends(get_db)] = None,
-    _=Depends(require_admin),
+    _=Depends(require_right("accounting")),
 ) -> dict:
     """Vorschau: Anzahl Belege/Buchungen, Summen und Hinweise – ohne etwas zu speichern."""
     s, res = _datev_run(db, date_from, date_to, include_incoming, persist=False)  # speichert nichts
@@ -404,7 +404,7 @@ def datev_export(
     date_to: date = Query(...),
     include_incoming: bool = True,
     db: Annotated[Session, Depends(get_db)] = None,
-    current_user: Annotated[User, Depends(require_admin)] = None,
+    current_user: Annotated[User, Depends(require_right("accounting"))] = None,
 ) -> Response:
     """DATEV-Export als ZIP (Buchungsstapel Ausgang/Eingang, Personenkonten, LIESMICH)."""
     s, res = _datev_run(db, date_from, date_to, include_incoming, persist=True)
@@ -428,7 +428,7 @@ def datev_export(
 
 
 @router.get("/datev/accounts")
-def datev_accounts(db: Annotated[Session, Depends(get_db)], _=Depends(require_admin)) -> list[dict]:
+def datev_accounts(db: Annotated[Session, Depends(get_db)], _=Depends(require_right("accounting"))) -> list[dict]:
     """Bereits vergebene Debitoren- und Kreditorennummern."""
     from app.models.datev import DatevAccount
 

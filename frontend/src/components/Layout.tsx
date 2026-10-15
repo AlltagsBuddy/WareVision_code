@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { authApi } from '../api/client'
 import Logo from './Logo'
 import TwoFactorModal from './TwoFactorModal'
+import { canView, hasRight, isManager } from '../utils/permissions'
 
 interface NavItem {
   path: string
@@ -77,9 +78,8 @@ export default function Layout() {
   const [pwError, setPwError] = useState('')
   const [pwSubmitting, setPwSubmitting] = useState(false)
 
-  const isAdmin = user?.role_name === 'admin'
-  const perm = (module: string) =>
-    isAdmin || user?.permissions?.[module]?.visible !== false
+  const isAdmin = isManager(user)
+  const perm = (module: string) => canView(user, module)
 
   const groups: NavGroup[] = ([
     { icon: 'home', items: [{ path: '/', label: 'Dashboard', show: true }] },
@@ -117,7 +117,7 @@ export default function Layout() {
       icon: 'euro',
       items: [
         { path: '/invoices', label: 'Rechnungen', show: perm('invoices') },
-        { path: '/accounting', label: 'Buchhaltung', show: isAdmin },
+        { path: '/accounting', label: 'Buchhaltung', show: hasRight(user, 'accounting') },
       ],
     },
     {

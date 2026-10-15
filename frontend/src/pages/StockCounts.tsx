@@ -3,6 +3,7 @@ import { stockCountsApi, storageLocationsApi, articleCategoriesApi } from '../ap
 import { useAuth } from '../hooks/useAuth'
 import BarcodeScanner from '../components/BarcodeScanner'
 import PreviewModal from '../components/PreviewModal'
+import { hasRight } from '../utils/permissions'
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Zählung läuft',
@@ -28,7 +29,8 @@ const fmtDiff = (d: number) => (d > 0 ? `+${d}` : String(d))
 
 export default function StockCounts() {
   const { user } = useAuth()
-  const isAdmin = user?.role_name === 'admin'
+  // Inventur starten/abschließen/stornieren: Sonderrecht „Lager & Einkauf“
+  const isAdmin = hasRight(user, 'lager_einkauf')
   const [counts, setCounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

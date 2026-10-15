@@ -131,6 +131,8 @@ class UserResponse(BaseModel):
     first_name: str
     last_name: str
     role_name: str
+    role_label: str = ""
+    is_manager: bool = False
     is_active: bool
     permissions: dict | None = None
 

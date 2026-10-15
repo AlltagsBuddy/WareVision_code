@@ -6,13 +6,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, module_guard, require_right
 from app.core.database import get_db
 from app.models.supplier import Supplier
 from app.models.user import User
 from app.schemas.supplier import SupplierCreate, SupplierRead, SupplierUpdate
 
-router = APIRouter(prefix="/suppliers", tags=["suppliers"])
+router = APIRouter(prefix="/suppliers", tags=["suppliers"], dependencies=[Depends(module_guard("suppliers"))])
 
 
 @router.get("", response_model=list[SupplierRead])
@@ -34,7 +34,7 @@ def list_suppliers(
 def create_supplier(
     payload: SupplierCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> Supplier:
     """Neuen Lieferanten anlegen."""
     supplier = Supplier(**payload.model_dump())
@@ -65,7 +65,7 @@ def update_supplier(
     supplier_id: UUID,
     payload: SupplierUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> Supplier:
     """Lieferant aktualisieren."""
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
@@ -85,7 +85,7 @@ def update_supplier(
 def delete_supplier(
     supplier_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> None:
     """Lieferant löschen. Artikel des Lieferanten werden nicht gelöscht."""
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()

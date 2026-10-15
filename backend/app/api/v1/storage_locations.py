@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_right
 from app.core.database import get_db
 from app.models.article import Article
 from app.models.storage_location import StorageLocation
@@ -38,7 +38,7 @@ def list_storage_locations(
 def create_storage_location(
     payload: StorageLocationCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> StorageLocation:
     """Neuen Lagerort anlegen."""
     existing = db.query(StorageLocation).filter(StorageLocation.name == payload.name).first()
@@ -59,7 +59,7 @@ def update_storage_location(
     location_id: UUID,
     payload: StorageLocationUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> StorageLocation:
     """Lagerort aktualisieren."""
     location = db.query(StorageLocation).filter(StorageLocation.id == location_id).first()
@@ -91,7 +91,7 @@ def update_storage_location(
 def delete_storage_location(
     location_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_right("lager_einkauf"))],
 ) -> None:
     """Lagerort löschen. Schlägt fehl wenn noch Artikel oder Fahrzeuge zugewiesen sind."""
     location = db.query(StorageLocation).filter(StorageLocation.id == location_id).first()

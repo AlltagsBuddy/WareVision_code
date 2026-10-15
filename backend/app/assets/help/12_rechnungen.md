@@ -1,6 +1,6 @@
 # Rechnungen
 
-## Rechnung erstellen (nur Admin)
+## Rechnung erstellen (Recht „Rechnungen“)
 „+ Neue Rechnung“: Quelle wählen – Werkstattauftrag (Positionen werden übernommen) oder manuell (Positionen eingeben). Kunde, Rechnungsdatum, Leistungsdatum, Fälligkeit und Anmerkungen angeben. Ohne Fälligkeit gilt Rechnungsdatum + 14 Tage. Eine neue Rechnung ist zunächst ein Entwurf.
 
 ## Leistungsdatum
@@ -18,7 +18,7 @@ Das Leistungsdatum ist der Tag, an dem die Leistung erbracht wurde (z. B. Repara
 ## Stornieren
 „Stornieren“ hebt eine Rechnung vollständig auf: Es entsteht eine Stornorechnung (Nummer STO-…) mit negativen Beträgen, die Originalrechnung wird als storniert markiert. Bei Rechnungen ohne Werkstattauftrag werden die Artikel ins Lager zurückgebucht. Der zugehörige Werkstattauftrag steht danach wieder auf „Abgeschlossen“: Positionen können geändert werden (entfernte Teile gehen ins Lager zurück) und mit „Rechnung erstellen“ entsteht eine neue Rechnung mit neuer Nummer. Wurde eine bezahlte Rechnung storniert, den Betrag an den Kunden zurücküberweisen. Gibt es zu einer Rechnung schon eine Rechnungskorrektur, ist Stornieren nicht mehr möglich – dann den Rest ebenfalls per Rechnungskorrektur gutschreiben.
 
-## Gutschrift / Rechnungskorrektur (nur Admin)
+## Gutschrift / Rechnungskorrektur (Recht „Rechnungen“)
 Für Teilgutschriften bei ausgestellten oder bereits bezahlten Rechnungen, z. B. wenn ein Teil zurückgegeben wurde, zu viel berechnet wurde oder du Kulanz gewährst: In der Rechnungsliste „Gutschrift / Korrektur“ klicken. Je Position die gutzuschreibende Menge eintragen (höchstens die noch nicht gutgeschriebene Menge). Bei Lagerartikeln kannst du „zurück“ anhaken, dann wird die Menge wieder ins Lager gebucht (nur ganze Stück). Optional einen zusätzlichen Nachlass oder Kulanzbetrag (netto) mit einem Steuersatz der Rechnung eingeben. Der Grund ist Pflicht und steht auf dem Beleg. „Rechnungskorrektur erstellen“ erzeugt einen eigenen Beleg mit fortlaufender Nummer RK-… und negativen Beträgen. Er verweist auf Nummer und Datum der Originalrechnung; die Originalrechnung selbst bleibt unverändert (GoBD). Mehrere Korrekturen zu einer Rechnung sind möglich, insgesamt aber nicht mehr als der Rechnungsbetrag.
 
 ## Erstattung
