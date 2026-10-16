@@ -71,11 +71,24 @@ async def upload_logo(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Datei zu gross. Maximal 2 MB.",
         )
-    ext = os.path.splitext(file.filename or "logo.png")[1].lower() or ".png"
+    # Bild prüfen und als PNG speichern (WebP kann das PDF nicht einbetten; Transparenz bleibt erhalten)
+    from io import BytesIO
+
+    from PIL import Image as PILImage, ImageOps
+
+    try:
+        img = PILImage.open(BytesIO(content))
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA")
+        # Für den Druck reicht ~1200 px Breite (60 mm bei über 500 dpi)
+        img.thumbnail((1200, 1200))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bild konnte nicht gelesen werden.") from exc
+    ext = ".png"
     logo_path = os.path.join(_UPLOAD_DIR, f"company_logo{ext}")
     os.makedirs(_UPLOAD_DIR, exist_ok=True)
-    with open(logo_path, "wb") as f:
-        f.write(content)
+    img.save(logo_path, format="PNG", optimize=True)
 
     # Altes Logo mit anderem Extension entfernen
     for old_ext in (".png", ".jpg", ".jpeg", ".webp"):

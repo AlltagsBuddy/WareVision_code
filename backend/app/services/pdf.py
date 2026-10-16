@@ -142,20 +142,49 @@ def _get_customer_address_lines(inv: Invoice) -> list[str]:
     return lines
 
 
-def _build_logo_cell(logo_path: str, max_height: float = 20 * mm) -> Image | None:
-    """Logo-Bild laden wenn Pfad existiert, sonst None."""
+# Logo auf Rechnungen: rechts oben, bündig mit dem rechten Seitenrand des Textes (20 mm vom Blattrand)
+LOGO_MAX_HEIGHT = 22 * mm
+LOGO_MAX_WIDTH = 60 * mm
+
+
+def _build_logo_cell(logo_path: str, max_height: float = 20 * mm, max_width: float = LOGO_MAX_WIDTH) -> Image | None:
+    """Logo-Bild laden wenn Pfad existiert, sonst None. Proportional in max_width × max_height einpassen."""
     if not logo_path:
         return None
     if not os.path.isfile(logo_path):
         return None
     try:
         img = Image(logo_path)
-        # Proportional skalieren auf max_height
         ratio = img.imageWidth / img.imageHeight
-        img._restrictSize(ratio * max_height, max_height)
+        height = max_height
+        width = ratio * height
+        if width > max_width:  # breite Logos nicht in die Firmenangaben ragen lassen
+            width = max_width
+            height = width / ratio
+        img.drawWidth, img.drawHeight = width, height
+        img.hAlign = "RIGHT"
         return img
     except Exception:
         return None
+
+
+def _header_with_logo(company_para, logo_img, total_width: float = 170 * mm - 12) -> Table:
+    """Kopfzeile: Firmenangaben links, Logo rechts oben – ohne Zellabstand, damit das Logo genau
+    am oberen und rechten Seitenrand (Seitenränder des Dokuments) sitzt und nicht an den Blattrand stößt.
+    Breite = nutzbare Breite des Rahmens (170 mm abzüglich 2 × 6 pt Rahmenabstand)."""
+    if not logo_img:
+        t = Table([[company_para]], colWidths=[total_width])
+        t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        return t
+    t = Table([[company_para, logo_img]], colWidths=[total_width - LOGO_MAX_WIDTH - 4 * mm, LOGO_MAX_WIDTH + 4 * mm])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("TOPPADDING", (1, 0), (1, 0), 0),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+    ]))
+    return t
 
 
 def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
@@ -189,8 +218,8 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
     company_bank_holder = settings_dict.get("company_bank_account_holder", "").strip() or company_name
     logo_path = settings_dict.get("company_logo_path", "").strip()
 
-    # --- Kopfzeile: Firmendaten links | Logo rechts ---
-    logo_img = _build_logo_cell(logo_path, max_height=22 * mm)
+    # --- Kopfzeile: Firmendaten links | Logo rechts oben (mit Abstand zum Blattrand) ---
+    logo_img = _build_logo_cell(logo_path, max_height=LOGO_MAX_HEIGHT)
 
     # Firmeninfo-Absatz links
     company_lines: list[str] = [f"<b>{company_name}</b>"]
@@ -209,19 +238,7 @@ def generate_invoice_pdf(db: Session, inv: Invoice) -> bytes:
 
     company_para = Paragraph("<br/>".join(company_lines), small)
 
-    if logo_img:
-        header_data = [[company_para, logo_img]]
-        header_table = Table(header_data, colWidths=[120 * mm, 50 * mm])
-        header_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ]))
-    else:
-        header_data = [[company_para]]
-        header_table = Table(header_data, colWidths=[170 * mm])
-        header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-
-    story.append(header_table)
+    story.append(_header_with_logo(company_para, logo_img))
     story.append(Spacer(1, 4 * mm))
     story.append(HRFlowable(width="100%", thickness=1.5, color=_HEADER_BG))
     story.append(Spacer(1, 6 * mm))
@@ -869,7 +886,7 @@ def generate_reminder_pdf(db: Session, inv: Invoice) -> bytes:
     company_bank_holder = settings_dict.get("company_bank_account_holder", "").strip() or company_name
     logo_path = settings_dict.get("company_logo_path", "").strip()
 
-    logo_img = _build_logo_cell(logo_path, max_height=22 * mm)
+    logo_img = _build_logo_cell(logo_path, max_height=LOGO_MAX_HEIGHT)
     company_lines: list[str] = [f"<b>{company_name}</b>"]
     if company_address:
         for line in company_address.replace("\r\n", "\n").split("\n"):
@@ -883,13 +900,7 @@ def generate_reminder_pdf(db: Session, inv: Invoice) -> bytes:
         company_lines.append(f"USt-IdNr.: {company_vat}")
     company_para = Paragraph("<br/>".join(company_lines), small)
 
-    header_data = [[company_para, logo_img or ""]]
-    header_table = Table(header_data, colWidths=[110 * mm, 60 * mm])
-    header_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-    ]))
-    story.append(header_table)
+    story.append(_header_with_logo(company_para, logo_img))
     story.append(HRFlowable(width="100%", thickness=0.8, color=_HEADER_BG))
     story.append(Spacer(1, 6 * mm))
 
