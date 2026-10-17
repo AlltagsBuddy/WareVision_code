@@ -24,6 +24,15 @@ const ACTION_LABELS: Record<string, string> = {
   photo_add: 'Foto hinzugefügt',
   photo_delete: 'Foto entfernt',
   item_delete: 'Position entfernt',
+  login: 'Anmeldung',
+  login_failed: 'Anmeldung fehlgeschlagen',
+  barcode_assign: 'Barcode zugeordnet',
+  catalog_import: 'Lieferantendaten importiert',
+  catalog_delete: 'Lieferantendaten entfernt',
+  user_create: 'Benutzer angelegt',
+  user_update: 'Benutzer/Rechte geändert',
+  user_deactivate: 'Benutzer deaktiviert',
+  '2fa_reset': 'Zwei-Faktor zurückgesetzt',
 }
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -35,6 +44,33 @@ const ENTITY_LABELS: Record<string, string> = {
   article: 'Artikel',
   quote: 'Angebot',
   purchase_order: 'Bestellung',
+  setting: 'Einstellung',
+  supplier: 'Lieferant',
+  vehicle: 'Fahrzeug',
+  article_category: 'Artikelkategorie',
+  storage_location: 'Lagerort',
+  labor_rate: 'Stundensatz',
+  maintenance_plan: 'Wartungsplan',
+  maintenance_task: 'Wartungsaufgabe',
+  manufacturer: 'Hersteller',
+  vehicle_model: 'Fahrzeugmodell',
+  stock_movement: 'Lagerbewegung',
+  stock_reservation: 'Reservierung',
+  user: 'Benutzer',
+  incoming_invoice: 'Eingangsrechnung',
+  stock_count: 'Inventur',
+  article_catalog: 'Lieferantendaten',
+}
+
+/** Änderung lesbar: „Feld: alt → neu“ */
+function changeText(log: any): string {
+  const nv = log.new_values || {}
+  const ov = log.old_values || {}
+  const keys = Array.from(new Set([...Object.keys(nv), ...Object.keys(ov)]))
+  if (log.action === 'update' && log.old_values) {
+    return keys.map((k) => `${k}: ${ov[k] ?? '–'} → ${nv[k] ?? '–'}`).join(', ')
+  }
+  return Object.entries(nv).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ')
 }
 
 export default function AuditLogs() {
@@ -77,7 +113,7 @@ export default function AuditLogs() {
     <div className="page">
       <h1>Audit-Log (Änderungsprotokoll)</h1>
       <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-        Protokollierung von Änderungen für GoBD/DSGVO-Konformität. Nur für Administratoren sichtbar.
+        Protokollierung von Änderungen für GoBD/DSGVO-Konformität. Nur für Administrator und Chef/Chefin sichtbar. Die Spalte „Benutzer“ zeigt, wer die Änderung gemacht hat.
       </p>
       <div className="toolbar">
         <input
@@ -117,6 +153,7 @@ export default function AuditLogs() {
           <thead>
             <tr>
               <th>Zeitpunkt</th>
+              <th>Benutzer</th>
               <th>Entität</th>
               <th>Aktion</th>
               <th>ID</th>
@@ -126,12 +163,13 @@ export default function AuditLogs() {
           <tbody>
             {logs.length === 0 ? (
               <tr>
-                <td colSpan={5}>Keine Einträge vorhanden.</td>
+                <td colSpan={6}>Keine Einträge vorhanden.</td>
               </tr>
             ) : (
               logs.map((log) => (
                 <tr key={log.id}>
                   <td>{formatDate(log.created_at)}</td>
+                  <td title={log.user_email || ''}>{log.user_name || (log.user_id ? 'Unbekannt' : 'System')}</td>
                   <td>{ENTITY_LABELS[log.entity_type] || log.entity_type}</td>
                   <td>{ACTION_LABELS[log.action] || log.action}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
@@ -145,10 +183,8 @@ export default function AuditLogs() {
                       </span>
                     )}
                     {log.action !== 'email_sent' && log.new_values && Object.keys(log.new_values).length > 0 && (
-                      <span title={JSON.stringify(log.new_values)}>
-                        {Object.entries(log.new_values)
-                          .map(([k, v]) => `${k}: ${v}`)
-                          .join(', ')}
+                      <span title={JSON.stringify({ vorher: log.old_values, nachher: log.new_values })}>
+                        {changeText(log)}
                       </span>
                     )}
                     {log.old_values && Object.keys(log.old_values).length > 0 && !log.new_values && (

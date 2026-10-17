@@ -46,11 +46,22 @@ def list_audit_logs(
     if action:
         query = query.filter(AuditLog.action == action)
     rows = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
+    # Wer hat geändert: Name und E-Mail des Benutzers mitliefern
+    ids = {r.user_id for r in rows if r.user_id}
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(ids)).all()} if ids else {}
+
+    def who(uid):
+        u = users.get(uid)
+        if not u:
+            return None
+        return f"{u.first_name} {u.last_name}".strip() or u.email
 
     return [
         {
             "id": str(r.id),
             "user_id": str(r.user_id) if r.user_id else None,
+            "user_name": who(r.user_id),
+            "user_email": users[r.user_id].email if r.user_id in users else None,
             "entity_type": r.entity_type,
             "entity_id": str(r.entity_id) if r.entity_id else None,
             "action": r.action,

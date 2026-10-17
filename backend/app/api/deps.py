@@ -47,6 +47,10 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Benutzer ist deaktiviert",
         )
+    # Für das automatische Änderungsprotokoll: wer ist angemeldet (siehe services/auto_audit.py)
+    from app.services.auto_audit import AUDIT_USER_KEY
+
+    db.info[AUDIT_USER_KEY] = user.id
     return user
 
 
