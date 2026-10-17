@@ -90,7 +90,8 @@ export default function PreviewModal({ title, url, type, onClose }: PreviewModal
           }}
         >
           {type === 'pdf' && !inlinePdf ? (
-            <div style={{ width: `${zoom * 100}%`, minWidth: '100%' }}>
+            // flex: 0 0 auto – sonst schrumpft der Flex-Container die Seite wieder auf 100 % (Zoom ohne Wirkung)
+            <div style={{ width: `${zoom * 100}%`, flex: '0 0 auto', margin: '0 auto' }}>
               {!pages && !error && <p style={{ color: '#cbd5e1', margin: '1rem' }}>Vorschau wird geladen…</p>}
               {error && <p className="error" role="alert" style={{ margin: '1rem' }}>{error}</p>}
               {pages?.map((src, i) => (
