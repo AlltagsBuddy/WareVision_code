@@ -98,6 +98,15 @@ export const authApi = {
     }),
 }
 
+/** PDF als Seitenbilder (für Handys, deren Browser PDFs nicht in der Seite anzeigen) */
+export const pdfPreviewApi = {
+  render: (pdf: Blob) => {
+    const f = new FormData()
+    f.append('file', pdf, 'vorschau.pdf')
+    return uploadForm<{ pages: string[]; page_count: number; truncated: boolean }>('/pdf-preview', f, 'Vorschau nicht möglich')
+  },
+}
+
 export const settingsApi = {
   get: () => api<{
     company_name: string
